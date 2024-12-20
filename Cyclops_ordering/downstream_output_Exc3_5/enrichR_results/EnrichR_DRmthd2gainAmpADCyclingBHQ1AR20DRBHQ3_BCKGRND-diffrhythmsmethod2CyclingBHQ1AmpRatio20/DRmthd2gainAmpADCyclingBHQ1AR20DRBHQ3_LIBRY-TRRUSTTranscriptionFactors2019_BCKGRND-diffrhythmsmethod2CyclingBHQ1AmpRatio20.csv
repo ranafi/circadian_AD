@@ -1,0 +1,2 @@
+Rank,Term name,P-value,Z-score,Combined score,Overlapping genes,Adjusted p-value,Old p-value,Old adjusted p-value,gene count
+1,RFX1 human,0.002803428322264443,593.3333333333334,3486.96791124271,['MAP1A'],0.002803428322264443,0,0,1

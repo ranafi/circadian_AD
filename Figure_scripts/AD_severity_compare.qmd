@@ -1,0 +1,96 @@
+---
+title: "enrichR_vs_fGSEA_plots"
+format: html
+editor: visual
+---
+
+This file takes fgsea results from AD_severity files (braak vs ceradsc) and plots them against each other for different cell types.
+
+```{r}
+library(tidyverse)
+library(stringr) 
+library(RColorBrewer)
+```
+
+### Define the functions:
+
+```{r}
+helper_func = function(braak_path, cerad_path, title, plotname, marker_color = "#0091ff", max.overlaps = 6, box_padding = 0.5, save_plots = T){
+  tryCatch({
+    braak_res = read_csv(braak_path, show_col_types = F)
+    cerad_res = read_csv(cerad_path, show_col_types = F)
+    
+    plot_df = merge(braak_res, cerad_res, by ="pathway", suffixes = c("_braak", "_cerad"))
+  
+      print("making plot")
+      p = ggplot(plot_df, aes(-log10(padj_braak), -log10(padj_cerad), label = str_wrap(str_to_title(str_replace_all(pathway, "_", " ")), 25)))+
+        geom_point(shape = 16, size = 5, alpha = .4, color = marker_color)+
+        ggrepel::geom_text_repel(max.overlaps = max.overlaps, color = "black", box.padding = box_padding, label.padding = 0.4 )+
+        xlab("-Log10(fGSEA BH.q) Ranked by DR pval by Braaksc")+
+        ylab("-Log10(fGSEA BH.q) Ranked by DR pval by Ceradsc")+
+        ggtitle(str_wrap(title, 50))+
+        theme_minimal()+
+        theme(
+          plot.margin = margin(t = 10, r = 20, b = 10, l = 10),
+          plot.title = element_text(size = 14),      # Title font size
+          axis.title = element_text(size = 12),     # Axis title font size
+          axis.text = element_text(size = 12),      # Axis text font size
+          legend.text = element_text(size = 12),    # Legend text font size
+          legend.title = element_text(size = 12)    # Legend title font size
+        )
+      print(p)
+      if(save_plots){
+        ggsave(paste0("~/Desktop/",plotname,".pdf"), plot = p, width = 5, height = 5, units = "in")
+      }
+      return(plot_df)
+    
+  },
+  error = function(e){message(e)}
+  )  
+}
+
+
+plot_function = function(downstream_str, title, plotname){
+  setwd(paste0("../Cyclops_ordering/",downstream_str ))
+    fgsea_braak = "fGSEA/fGSEA_results/AD_severity_braak_AR20_minusLogPRanked.csv"
+  fgsea_cerad = "fGSEA/fGSEA_results/AD_severity_ceradsc_AR20_minusLogPRanked.csv"
+
+  helper_func(braak_path = fgsea_braak, cerad_path = fgsea_cerad, title = title, plotname = plotname)
+
+}
+
+list.files("../Cyclops_ordering/", pattern = "downstream_output*")
+```
+
+### Excitatory Neurons 3 & 5
+
+```{r}
+plot_function("downstream_output_Exc3_5", "DR Pathology Comparison, Exc 3&5", "cerad_vs_braak_fGSEA_results_Exc3_5")
+
+```
+
+### Excitatory Neurons All
+
+```{r}
+plot_function("downstream_output_Exc_all", "DR Pathology Comparison, Excitatory", "cerad_vs_braak_fGSEA_results_Exc_all")
+
+```
+
+### Inhib Neurons
+
+```{r}
+plot_function("downstream_output_Inhib_all", "DR Pathology Comparison, Inhibitory", "cerad_vs_braak_fGSEA_results_Inhib_all")
+
+```
+
+### Astrocytes
+
+```{r}
+plot_function("downstream_output_Ast_all", "DR Pathology Comparison, Astrocytes", "cerad_vs_braak_fGSEA_results_Ast_all")
+```
+
+### Microglia
+
+```{r}
+plot_function("downstream_output_Mglia_all", "DR Pathology Comparison, Microglia", "cerad_vs_braak_fGSEA_results_Mglia_all")
+```

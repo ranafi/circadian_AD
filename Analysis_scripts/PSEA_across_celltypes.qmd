@@ -1,0 +1,114 @@
+---
+title: "PSEA_between_cell_types"
+format: html
+editor: visual
+---
+
+```{r}
+library(tidyverse)
+```
+
+Read in the cycling results from different cell types:
+
+```{r}
+isCyclingSigCutoff = 0.1
+amplitudeRatioCutoff = 0.2
+isCyclingSigCutoff_str = str_extract(as.character(isCyclingSigCutoff), "(?<=\\.)\\d+")
+
+
+eneuron_CTL = read_csv("../Cyclops_ordering/downstream_output_Exc_3_5/cosinor_results_CTL.csv", show_col_types = F) %>%  filter(as.numeric(amp_ratio) >=amplitudeRatioCutoff & as.numeric(BHQ) < isCyclingSigCutoff) %>% arrange(as.numeric(BHQ))
+
+eneuron_AD = read_csv("../Cyclops_ordering/downstream_output_Exc_3_5/cosinor_results_AD.csv", show_col_types = F) %>% filter(as.numeric(amp_ratio) >= amplitudeRatioCutoff & as.numeric(BHQ) < isCyclingSigCutoff) %>% arrange(as.numeric(BHQ))
+
+Ineuron_CTL = read_csv("../Cyclops_ordering/downstream_output_Inhib_2_8_11_12_13/cosinor_results_CTL.csv", show_col_types = F)%>%  filter(as.numeric(amp_ratio) >=amplitudeRatioCutoff & as.numeric(BHQ) < isCyclingSigCutoff) %>% arrange(as.numeric(BHQ))
+
+Ineuron_AD = read_csv("../Cyclops_ordering/downstream_output_Inhib_2_8_11_12_13/cosinor_results_AD.csv", show_col_types = F) %>% filter(as.numeric(amp_ratio) >=amplitudeRatioCutoff & as.numeric(BHQ) < isCyclingSigCutoff) %>% arrange(as.numeric(BHQ))
+
+Ast_CTL = read_csv("../Cyclops_ordering/downstream_output_Ast_1_2_5_6_7_8/cosinor_results_CTL.csv", show_col_types = F)%>%  filter(as.numeric(amp_ratio) >=amplitudeRatioCutoff & as.numeric(BHQ) < isCyclingSigCutoff) %>% arrange(as.numeric(BHQ))
+
+Ast_AD = read_csv("../Cyclops_ordering/downstream_output_Ast_1_2_5_6_7_8/cosinor_results_AD.csv", show_col_types = F) %>% filter(as.numeric(amp_ratio) >= amplitudeRatioCutoff & as.numeric(BHQ) < isCyclingSigCutoff) %>% arrange(as.numeric(BHQ))
+
+Mglia_CTL = read_csv("../Cyclops_ordering/downstream_output_Mglia_4_5_6_7_8_10_11_13_15_16/cosinor_results_CTL.csv", show_col_types = F)%>%  filter(as.numeric(amp_ratio) >=amplitudeRatioCutoff & as.numeric(BHQ) < isCyclingSigCutoff) %>% arrange(as.numeric(BHQ))
+
+Mglia_AD = read_csv("../Cyclops_ordering/downstream_output_Mglia_4_5_6_7_8_10_11_13_15_16/cosinor_results_AD.csv", show_col_types = F) %>%  filter(as.numeric(amp_ratio) >=amplitudeRatioCutoff & as.numeric(BHQ) < isCyclingSigCutoff) %>% arrange(as.numeric(BHQ))
+
+```
+
+Merge results from different cell types.
+
+```{r}
+if (!(dir.exists("../Cyclops_ordering/PSEA_celltype_diffs"))){
+  dir.create("../Cyclops_ordering/PSEA_celltype_diffs")
+}
+
+EN_IN_CTL = merge(eneuron_CTL, Ineuron_CTL, by = "Gene_Symbols")
+EN_MG_CTL = merge(eneuron_CTL, Mglia_CTL, by = "Gene_Symbols")
+EN_AS_CTL = merge(eneuron_CTL, Ast_CTL, by = "Gene_Symbols")
+MG_AS_CTL = merge(Mglia_CTL, Ast_CTL, by = "Gene_Symbols")
+
+EN_IN_AD = merge(eneuron_AD, Ineuron_AD, by = "Gene_Symbols")
+EN_MG_AD = merge(eneuron_AD, Mglia_AD, by = "Gene_Symbols")
+EN_AS_AD = merge(eneuron_AD, Ast_AD, by = "Gene_Symbols")
+MG_AS_AD = merge(Mglia_AD, Ast_AD, by = "Gene_Symbols")
+
+```
+
+Write files for PSEA
+
+```{r}
+ #create lists of genes for PSEA
+write_PSEA_files = function(df, cell_types, isCyclingSigCutoff_str){
+  out_filename = paste0("../Cyclops_ordering/PSEA_celltype_diffs/PSEA_", cell_types, "_AR20BHQ", isCyclingSigCutoff_str, "_acrodiffs.txt")
+  
+  df1 =  mutate(df, acrodiff = (as.numeric(acrophase.x) - as.numeric(acrophase.y)) * 12/ pi) %>% select(Gene_Symbols, acrodiff)
+  
+  write.table(df1, out_filename, sep = '\t', row.names = F, col.names = F, quote = F)
+}
+
+write_PSEA_files(EN_IN_CTL, "EN_IN_CTL", isCyclingSigCutoff_str)
+
+write_PSEA_files(EN_MG_CTL, "EN_MG_CTL", isCyclingSigCutoff_str)
+
+write_PSEA_files(EN_AS_CTL, "EN_AS_CTL", isCyclingSigCutoff_str)
+
+write_PSEA_files(MG_AS_CTL, "MG_AS_CTL", isCyclingSigCutoff_str)
+
+write_PSEA_files(EN_IN_AD, "EN_IN_AD", isCyclingSigCutoff_str)
+
+write_PSEA_files(EN_MG_AD, "EN_MG_AD", isCyclingSigCutoff_str)
+
+write_PSEA_files(EN_AS_AD, "EN_AS_AD", isCyclingSigCutoff_str)
+
+write_PSEA_files(EN_AS_AD, "EN_AS_AD", isCyclingSigCutoff_str)
+```
+
+Run PSEA
+
+```{r}
+path = getwd()
+path_no_space = gsub(" ", "\\ ", path, fixed = TRUE)
+
+# List of pathways, downloaded from MsigDB, absolute paths
+psea_pathways <- c(paste0(getwd(), "/MsigDB_gmts_for_GSEA/c2.cp.kegg_legacy.v2024.1.Hs.symbols.gmt"), paste0(getwd(), "/MsigDB_gmts_for_GSEA/h.all.v2024.1.Hs.symbols.gmt"))
+
+# make sure no spaces when calling cmd
+psea_pathways = gsub(" ", "\\ ", psea_pathways, fixed = TRUE) 
+
+# change dir into PSEA directory
+setwd("../Cyclops_ordering/PSEA_celltype_diffs/")
+
+#list PSEA input files (generated during cosinor regression/DR step)
+psea_files = list.files(pattern = "*.txt")
+
+#dataframe where rows are arguments to system, I will apply system call across rows
+arg_df = expand.grid(psea_files, psea_pathways) %>% 
+    mutate(out_dirs = paste(str_extract(string = as.character(Var1),            pattern= ".+(?=\\.txt)"), basename(as.character(Var2)) %>%
+    str_extract(pattern= ".+(?=\\.gmt)")%>% 
+    gsub(pattern = "\\.", replacement = ""), sep = "_") )
+
+#apply system call, calling PSEA jar file, using rows of arg_df as arguments
+apply(arg_df, 1, function(a){
+    system(paste0("java -jar ", path_no_space, "/downstream_helpers/PSEA_cmd.jar ", 
+    a[[1]], " ", a[[2]]," ", a[[3]], " 5 10000 pdf"))
+        })
+```

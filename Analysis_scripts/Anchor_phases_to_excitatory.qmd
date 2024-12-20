@@ -1,0 +1,41 @@
+---
+title: "Anchor_phases_to_excitatory"
+format: html
+editor: visual
+---
+
+This file takes the predicted acrophase of ARNTL in the #trusted excitatory neuron subset and subtracts (and flips) #the Phase column of the cyclops fit file to anchor the phases. #All downstream output will therefore use the shifted phase column
+
+```{r}
+library(tidyverse)
+order_path = "../Cyclops_ordering/" #get cyclops predictions 
+cyc_pred_file = list.files(path = paste0(order_path, "/Fits/"), pattern = 'Fit_Output_')
+cyc_pred = read_csv(paste(order_path, "Fits", cyc_pred_file[1], sep = '/'), show_col_types = FALSE)
+```
+
+Read in regression results from excitatory neuron subset in CTL:
+
+```{r}
+path = "../Cyclops_ordering/downstream_output_Exc3_5_for_anchoring/cosinor_results_CTL.csv"
+
+acrophases_arntl = read_csv(path, show_col_types = F) %>% filter(Gene_Symbols == "ARNTL") %>% select(acrophase) %>% unname %>% unlist
+```
+
+Shift the subject phases by acrophase_arntl (and flip if needed):
+
+```{r}
+cyc_pred$Phase_original = cyc_pred$Phase
+cyc_pred = mutate(cyc_pred, Phase = (-1 *(Phase_original - acrophases_arntl)) %% (2*pi))
+```
+
+Does my anchored phase look like mouse alignment?
+
+```{r}
+plot(cyc_pred$Phase, cyc_pred$Phases_MA)
+```
+
+Write back out phases:
+
+```{r}
+write.table(cyc_pred, paste(order_path, "Fits", cyc_pred_file[1], sep = '/'), sep = ",", row.names = F)
+```

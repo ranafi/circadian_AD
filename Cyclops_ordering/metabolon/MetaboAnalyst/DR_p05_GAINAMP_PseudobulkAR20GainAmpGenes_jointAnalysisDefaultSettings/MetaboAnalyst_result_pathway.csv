@@ -1,0 +1,6 @@
+"","Total","Expected","Hits","Raw p","-log10(p)","Holm adjust","FDR","Impact"
+"Glycosaminoglycan biosynthesis - chondroitin sulfate / dermatan sulfate",18,0.036885,1,0.036374,1.4392,1,1,0.11765
+"Histidine metabolism",32,0.065574,1,0.063927,1.1943,1,1,0.032258
+"Fatty acid elongation",75,0.15369,1,0.14464,0.83972,1,1,0.013514
+"N-Glycan biosynthesis",77,0.15779,1,0.14825,0.829,1,1,0.026316
+"Fatty acid degradation",102,0.20902,1,0.1924,0.71579,1,1,0.019802

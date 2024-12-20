@@ -1,0 +1,5 @@
+Rank,Term name,P-value,Z-score,Combined score,Overlapping genes,Adjusted p-value,Old p-value,Old adjusted p-value,gene count
+1,Gastric acid secretion,0.0029069294583715763,inf,inf,['SLC4A2'],0.007267357827928336,0,0,1
+2,Salivary secretion,0.004360403693666591,inf,inf,['SLC4A2'],0.007267357827928336,0,0,1
+3,Bile secretion,0.005813880031962282,inf,inf,['SLC4A2'],0.007267357827928336,0,0,1
+4,Pancreatic secretion,0.007267357827928336,inf,inf,['SLC4A2'],0.007267357827928336,0,0,1

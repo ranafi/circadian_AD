@@ -1,0 +1,3 @@
+Rank,Term name,P-value,Z-score,Combined score,Overlapping genes,Adjusted p-value,Old p-value,Old adjusted p-value,gene count
+1,Amyotrophic lateral sclerosis (ALS) WP2447,0.009784559415556615,136.73076923076923,632.6463924472765,['NEFH'],0.018110272176659354,0,0,1
+2,Association Between Physico-Chemical Features and Toxicity Associated Pathways WP3680,0.018110272176659354,70.98,284.72036892685935,['NEFH'],0.018110272176659354,0,0,1

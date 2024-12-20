@@ -1,0 +1,6 @@
+"Query","Match","HMDB","PubChem","KEGG","SMILES","Comment"
+"PC(P-16:0/20:4(5Z,8Z,11Z,14Z))","NA","NA","NA","NA","NA","0"
+"2-Hydroxyhexadecanoic acid","2-Hydroxyhexadecanoic acid","HMDB0031057","12575964",NA,"CCCCCCCCCCCCCC[C@H](O)C(O)=O","1"
+"alpha-Tocopherol","alpha-Tocopherol","HMDB0001893","14985","C02477","CC(C)CCC[C@@H](C)CCC[C@@H](C)CCC[C@]1(C)CCC2=C(C)C(O)=C(C)C(C)=C2O1","1"
+"SM(d18:1/22:0)","SM(d18:1/22:0)","HMDB0012103","44260125","C00550","CCCCCCCCCCCCCCCCCCCCCC(=O)N[C@@H](COP([O-])(=O)OCC[N+](C)(C)C)[C@H](O)\C=C\CCCCCCCCCCCCC","1"
+"Salicylic acid","Salicylic acid","HMDB0001895","338","C00805","OC(=O)C1=C(O)C=CC=C1","1"

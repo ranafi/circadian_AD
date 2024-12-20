@@ -1,0 +1,57 @@
+---
+title: "Metaboanalyst"
+format: html
+editor: visual
+---
+
+```{r}
+require(tidyverse)
+require(httr)
+```
+
+### Read in translation dict for metaboanalyst
+
+```{r}
+trans_dict = readxl::read_xlsx("../metabolic_data/metaboanalyst_trans.xlsx")
+#The reason this file is needed is that metaboanalyst does not recognize all of the compound names provided by metabolon. This file was generated in the following way: I took metabolon_data_key HMDB ID's and converted them to compound IDs with MetaboAnalyst. But not all of the compoounds had HMDB IDs. Of these, I converted the pubChem IDs given in the metabolon_data_key to compound names in metaboAnalyst. 
+```
+
+### Read metabolite list:
+
+```{r}
+cycling_in_CTL = read_csv("../Cyclops_ordering/metabolon/cycling_in_CTL.csv", show_col_types = F)
+cycling_in_CTL_BHQ1  = filter(cycling_in_CTL, BHQ < 0.1)
+
+cycling_in_AD = read_csv("../Cyclops_ordering/metabolon/cycling_in_AD.csv",show_col_types = F)
+cycling_in_AD_BHQ1 = filter(cycling_in_AD, BHQ < 0.1)
+
+diff_cycling = read_csv("../Cyclops_ordering/metabolon/diff_rhythms_CyclingBHQ1.csv", show_col_types = F)
+diff_cycling_BHQ = filter(diff_cycling, p_val < 0.05)
+
+gain_amp = read_csv("../Cyclops_ordering/metabolon/diff_rhythms_CyclingBHQ1.csv", show_col_types = F) %>% dplyr::filter( p_val < 0.05 & Log_AD_CTL_ampRatio > 0 )
+
+lose_amp = read_csv("../Cyclops_ordering/metabolon/diff_rhythms_CyclingBHQ1.csv", show_col_types = F) %>% dplyr::filter( p_val < 0.05 & Log_AD_CTL_ampRatio < 0 )
+```
+
+### Merge with trans_dict
+
+```{r}
+cycling_CTL = merge(cycling_in_CTL_BHQ1, trans_dict, by.x = "SHORT_NAME", by.y = "SHORT_NAME_Metabolon", suffixes = "_metaboAnalyst")
+
+cycling_AD = merge(cycling_in_AD_BHQ1, trans_dict, by.x = "SHORT_NAME", by.y = "SHORT_NAME_Metabolon", suffixes = "_metaboAnalyst")
+
+diff_cycling_out = merge(diff_cycling_BHQ, trans_dict, by.x = "SHORT_NAME", by.y = "SHORT_NAME_Metabolon", suffixes = "_metaboAnalyst")
+
+gain_amp_out = merge(gain_amp, trans_dict, by = "SHORT_NAME", by.y = "SHORT_NAME_Metabolon", suffixes = "_metaboAnalyst")
+
+lose_amp_out = merge(lose_amp, trans_dict, by = "SHORT_NAME", by.y = "SHORT_NAME_Metabolon", suffixes = "_metaboAnalyst")
+
+write.table(cycling_CTL, "../Cyclops_ordering/metabolon/MetaboAnalyst/Cycling_in_CTL_BHQ1.csv", sep = ',', row.names = F)
+write.table(cycling_AD, "../Cyclops_ordering/metabolon/MetaboAnalyst/Cycling_in_AD_BHQ1.csv", sep = ',', row.names = F)
+write.table(diff_cycling_out, "../Cyclops_ordering/metabolon/MetaboAnalyst/Diff_cycling_p05.csv", sep = ',', row.names = F)
+write.table(gain_amp_out, "../Cyclops_ordering/metabolon/MetaboAnalyst/Diff_cycling_GainAmp_p05.csv", sep = ',', row.names = F)
+write.table(lose_amp_out, "../Cyclops_ordering/metabolon/MetaboAnalyst/Diff_cycling_LoseAmp_p05.csv", sep = ',', row.names = F)
+```
+
+```         
+```

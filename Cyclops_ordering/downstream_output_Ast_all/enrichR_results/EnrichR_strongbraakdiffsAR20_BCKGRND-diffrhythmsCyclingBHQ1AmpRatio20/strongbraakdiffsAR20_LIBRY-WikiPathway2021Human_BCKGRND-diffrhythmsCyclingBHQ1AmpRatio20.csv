@@ -1,0 +1,2 @@
+Rank,Term name,P-value,Z-score,Combined score,Overlapping genes,Adjusted p-value,Old p-value,Old adjusted p-value,gene count
+1,Proximal tubule transport WP4917,0.005087141649838639,inf,inf,['SLC4A2'],0.005087141649838639,0,0,1

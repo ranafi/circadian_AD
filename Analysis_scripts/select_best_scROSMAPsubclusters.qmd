@@ -1,0 +1,567 @@
+---
+title: "select_best_scROSMAPsubclusters"
+format: html
+editor: visual
+---
+
+```{r}
+library(Seurat)
+library(edgeR)
+library(NMOF)
+library(parallel)
+library(tidyverse)
+library(deltaccd)
+library(gridExtra)
+library(grid)
+load("../rosmap437_pseudobulk_by_cluster_all_celltypes.rda")
+dim(counts) #the counts matrix
+dim(pseudobulk_meta) #The metadata
+```
+
+### Read in ROSMAP metadata
+
+```{r}
+#because 12 subjects have >1 sequencing batch, the individualIDs for these subjects in counts and pseudobulk_meta have been modified to include seq. batch. Here we make a column of the original_individualID
+pseudobulk_meta$original_individualID = str_replace(pseudobulk_meta$individualID,"-B[0-9]+", "")
+
+#Read is rosmap_clinical data
+rosmap_clinical = read.csv("../ROSMAP_metadata/ROSMAP_clinical.csv")
+
+#clinical metadata contains distinct projid and individualIDs?
+length(unique(rosmap_clinical$individualID)) == nrow(rosmap_clinical)
+length(unique(rosmap_clinical$projid)) == nrow(rosmap_clinical)
+
+#Remove entries that map to NA individualID
+rm_entries = which(pseudobulk_meta$individualID == "NA")
+counts = counts[,-rm_entries]
+pseudobulk_meta = pseudobulk_meta[-rm_entries, ]
+
+#What are the unique individualIDs left (indivIDs without seq batch)
+unique_subs_in_counts = unique(pseudobulk_meta$original_individualID)
+
+#Are all individualIDs from data in clinical metadata?
+all(unique_subs_in_counts %in% rosmap_clinical$individualID)
+
+#filter clinical to contain only the subjects I have:
+rosmap_meta = rosmap_clinical %>% filter(individualID %in% unique_subs_in_counts)
+
+
+# #read in sequencing metadata for all scRNAseq done for ROSMAP
+# rosmap_scassay_meta = read_csv("../ROSMAP_metadata/ROSMAP_assay_scrnaSeq_metadata.csv", show_col_types = F)
+# 
+# rosmap_scassay_meta = rosmap_scassay_meta %>% separate_wider_delim(cols = 2, delim = "_", names = c("col1", "individualID"), too_many = "drop", too_few = "align_start")
+
+#which 437 subjects were used by Columbia?
+cell_anot_437 = read_csv("../ROSMAP_metadata/cell-annotation.n437.csv", show_col_types = F)%>% separate_wider_delim(cols ="batch", delim = "-", names = c("col1", "batch_new", "replicate"), too_many = "drop", too_few = "align_start", cols_remove = F)
+
+# Check if unique individuals have unique batch_new
+#This is how I identified that 12 subjects had two sequencing batches
+df_check <- cell_anot_437 %>%
+  group_by(individualID) %>%
+  filter(!is.na(batch_new)) %>%  # Ignore NA values in the batch column
+  summarize(unique_batches = n_distinct(batch_new),
+            batches = list(unique(batch_new))) %>%  # Get unique batch values
+  filter(unique_batches > 1)
+
+
+n437 = cell_anot_437 %>% dplyr::select(individualID, batch_new) %>% distinct
+
+##### AUGMENT ROSMAP_META #####
+#here we create a new rosmap_meta df and make coloumns with individualID and individualID_new (ID + batch if multiple batches)
+rosmap_meta_new = data.frame(individualID = str_replace(unique(pseudobulk_meta$individualID), "-B[0-9]+", ""), individualID_new = unique(pseudobulk_meta$individualID))
+
+#Merge the existing rosmap_meta object with new df
+rosmap_meta_new = merge(rosmap_meta_new, rosmap_meta, by = "individualID")
+#We create a batch column, filling in the batches of the 12 duplicates first, using the individualID_new column:
+rosmap_meta_new$batch = str_extract(rosmap_meta_new$individualID_new,"(?<=-B)[0-9]+")
+
+rm(rosmap_meta)
+#indivs with no batch as of yet (not one of 12)
+edit_batch_row = which(is.na(rosmap_meta_new$batch))
+#individualIDs for which I need to fill in batch info:
+edit_batch_subjects = rosmap_meta_new$individualID_new[edit_batch_row]
+#match the edit_batch_subjects to n437's individualID column, should expect some NA's because n437 doesn't have all the people rosmap_meta currently has
+rosmap_meta_new$batch[edit_batch_row] = n437$batch_new[match(edit_batch_subjects, n437$individualID)]
+
+#Remove the "b" character from the batch column
+rosmap_meta_new$batch = str_extract(rosmap_meta_new$batch, "[0-9]+") %>% as.numeric
+#bin the batches based on if they were resequenced at NYGC:
+rosmap_meta_new = rosmap_meta_new %>%
+  mutate(batch_bin = cut(batch, c(4, 10, 64), right = F))
+#Add pathological variable bins:
+rosmap_meta_new = rosmap_meta_new %>%
+  mutate(braaksc_bin = cut(braaksc, c(0, 3, 5, 7), right = F))
+rosmap_meta_new = rosmap_meta_new %>%
+  mutate(ceradsc_bin = cut(ceradsc, c(1, 3, 5), right = F))
+rosmap_meta_new$apoe_ordinal  = 1
+rosmap_meta_new$apoe_ordinal[rosmap_meta_new$apoe_genotype == 34 | rosmap_meta_new$apoe_genotype == 24] = 2
+rosmap_meta_new$apoe_ordinal[rosmap_meta_new$apoe_genotype == 44 ] = 3
+rosmap_meta_new$apoe_ordinal[is.na(rosmap_meta_new$apoe_genotype) ] = NA
+rosmap_meta_new$age_death_numeric = rosmap_meta_new$age_death %>% str_replace("\\+", "") %>% as.numeric
+rosmap_meta_new = rosmap_meta_new %>%
+  mutate(cond_cogdx = case_when(
+    cogdx %in% c(3, 6) ~ NA_real_,  # Use NA_real_ to explicitly create a numeric NA
+    cogdx %in% c(4, 5) ~ 1,
+    cogdx %in% c(1, 2) ~ 0,
+    TRUE ~ NA_real_  # Optional: for any other case, assign NA (useful if there are other unexpected values)
+  ))
+
+rosmap_meta = rosmap_meta_new
+
+#adds cogdx score, sex, and pmi for each subcluster
+all( pseudobulk_meta$individualID %in% rosmap_meta$individualID_new)
+
+pseudobulk_meta$cogdx = rosmap_meta$cogdx[match(pseudobulk_meta$individualID, rosmap_meta$individualID_new)]
+
+pseudobulk_meta$cond_cogdx = rosmap_meta$cond_cogdx[match(pseudobulk_meta$individualID, rosmap_meta$individualID_new)]
+
+pseudobulk_meta$pmi = rosmap_meta$pmi[match(pseudobulk_meta$individualID, rosmap_meta$individualID_new)]
+
+pseudobulk_meta$sex = rosmap_meta$msex[match(pseudobulk_meta$individualID, rosmap_meta$individualID_new)]
+
+pseudobulk_meta$project_id = rosmap_meta$projid[match(pseudobulk_meta$individualID, rosmap_meta$individualID_new)]
+
+rosmap_meta = filter(rosmap_meta, individualID %in% n437$individualID)
+
+#double checking all rosmap_meta subjects were in n437:
+# all(rosmap_meta$individualID %in% n437$individualID)
+# subs_by_cond = rosmap_meta %>%
+#   group_by(cond_cogdx)%>%
+#   summarise(n = n(),median_age_at_death = median(age_death_numeric), mad_age_death = mad(age_death_numeric), mean_age_death_numeric = mean(age_death_numeric, na.rm = T), std_age_death_numeric = sd(age_death_numeric, na.rm = T),median_pmi = median(pmi, na.rm = T), mad_pmi = mad(pmi, na.rm = T), mean_pmi = mean(pmi, na.rm = T), sd_pmi = sd(pmi, na.rm = T), prop_male = sum(msex) / n, prop_ROS = sum(Study == "ROS")/ n, median_braaksc = median(braaksc))
+
+
+#Now limit to only patients with cogdx 12, 4, 5:
+rosmap_meta = rosmap_meta %>% filter(!is.na(cond_cogdx))
+table(rosmap_meta$cond_cogdx, useNA = "ifany")
+
+
+```
+
+### Create Seurat object
+
+```{r}
+#creates a seurat object
+seurat_obj = CreateSeuratObject(
+  counts,
+  project = "scRNA ROSMAP",
+  assay = "RNA",
+  meta.data = pseudobulk_meta)
+```
+
+```{r}
+#creates a reference correlation matrix
+refCor = getRefCor(species = "human", tissue = "pan", useEntrezGeneId = F)
+```
+
+### Loss function for grid search:
+
+Only needed for finding the best circadian subclusters of excitatory neurons
+
+```{r}
+
+loss = function(str){
+  expr = FetchData(seurat_obj, vars = "state")
+  tmp = seurat_obj[,grep(str, expr$state)]
+  
+  cts <- AggregateExpression(tmp,
+                             group.by = c("individualID"),
+                             assays = 'RNA',
+                             slot = "counts",
+                             return.seurat = FALSE)
+  cts = cts$RNA[,na.exclude(match(rosmap_meta$individualID_new, colnames(cts$RNA)))]
+
+  my_rosmap_meta = rosmap_meta[match(colnames(cts), rosmap_meta$individualID_new), ]
+  
+  #These individualIDs have fewer than 10 Exc3 or Exc5 counts:
+  rm_subjects = c('R2347173','R1583702','R2420066','R5394614','R5138383','R4240155','R9127940','R1207203','R4022468','R4119160')
+
+  stopifnot(all(my_rosmap_meta$individualID_new == colnames(cts)))
+  rm_idx_cts = which(colnames(cts) %in% rm_subjects)
+  colnames(cts)[rm_idx_cts]
+  my_rosmap_meta = my_rosmap_meta[-rm_idx_cts,]
+  cts = cts[,-rm_idx_cts]
+  stopifnot(all(my_rosmap_meta$individualID_new == colnames(cts)))
+  #---------RM mito genes----------
+  mito_gene_idx = grep("^MT-",rownames(cts))
+  cts = cts[-mito_gene_idx, ]
+  # RM dups with less counts in pseudobulk:
+  rm_dup = c("R2144127-B52", "R2880377-B40", "R4817881-B53", "R4996203-B51", "R5447358-B36", "R5693901-B4",  "R6280004-B50", "R6679530-B52",
+  "R7702934-B59", "R8724814-B46", "R8760165-B48", "R8781115-B43")
+  
+  #rm_subjects in both counts and rosmap_metadata
+  stopifnot(all(my_rosmap_meta$individualID_new == colnames(cts)))
+  rm_idx = which(colnames(cts) %in% rm_dup)
+  my_rosmap_meta = my_rosmap_meta[-rm_idx,]
+  cts = cts[,-rm_idx]
+  colnames(cts) = str_replace(colnames(cts), "-B[0-9]+", "")
+  stopifnot(all(my_rosmap_meta$individualID == colnames(cts)))
+  #-------Norm Counts-----
+  #create DGElist
+  y <- DGEList(counts = cts, group = my_rosmap_meta$cond_cogdx)
+  #default params for filterByExpression
+  keep.genes = filterByExpr(y)
+  if (all(keep.genes[rownames(refCor)])){
+  #filter out the genes
+  y = y[keep.genes, , keep=FALSE]
+  # print(paste("keeping", dim(y)[1], "genes"))
+  
+  my_tmm_DGE_obj <- calcNormFactors(y, method = "TMM")
+  my_tmm = cpm(my_tmm_DGE_obj) #calculate tmms: https://www.biostars.org/p/317701/
+  my_tmm = as.data.frame(my_tmm)
+  
+
+  # all(colnames(my_tmm) == (rosmap_meta$projid))
+  try({
+  ans = calcCCD(refCor, emat = as.data.frame(my_tmm[rownames(refCor),]), groupVec = my_rosmap_meta$cond_cogdx)
+  return(ans$CCD[1])},
+  silent = T
+  
+  )
+  return(Inf)
+  } 
+  return(Inf)
+  }
+
+```
+
+### Generate combinations for testing ccd
+
+Also only needed when finding the best circadian subclusters of Excitatory neurons
+
+```{r}
+# I found Exc 3 and 5 were best subclusters on the n424 version of this dataset, now I'm quick checking those are still the best out of all 2 combinations of subclusters
+# 16 choose 2
+n = 16 #number of subclusters to consider
+library(combinat)
+k = 2
+# Generate all combinations of 14 choose 2
+combinations <- combn(1:n, k)
+# Convert each combination to a string and store in a list
+strs <- apply(combinations, 2, function(x) paste0("^Exc\\.",x, "$", collapse = "|"))
+
+# Print the list of strings
+print(head(strs))
+```
+
+Testing All combinations of Exc neurons:
+
+```{r}
+n = 16 #number of subclusters to consider
+l <- rep(list(0:1), n)
+df=expand.grid(l)
+colnames(df) = paste0("^Exc\\.", 1:n,"$") 
+
+strs = c()
+for (i in 2:nrow(df)){
+  out = paste(colnames(df)[which(df[i,] == 1)], collapse = "|")
+  strs = c(strs, out)
+}
+
+```
+
+### Run Grid Search
+
+Only needed for finding the best circadian subclusters of excitatory neurons
+
+```{r}
+tic = Sys.time()
+grid_results = gridSearch(loss, levels = list(str = strs), method = 'multicore', mc.control = list(mc.cores = 10))
+toc = Sys.time()
+print(toc-tic)
+# Exc.3|Exc.5
+#"Ast\\.1$|Ast\\.2$|Ast\\.5$|Ast\\.6$|Ast\\.7$|Ast\\.8$"
+```
+
+### Take the best subtypes and make a tmm
+
+```{r}
+get_subcluster_data = function(str){
+  expr = FetchData(seurat_obj, vars = "state")
+  tmp = seurat_obj[,grep(str, expr$state)]
+  
+  cts <- AggregateExpression(tmp,
+                             group.by = c("individualID"),
+                             assays = 'RNA',
+                             slot = "counts",
+                             return.seurat = FALSE)
+  cts = cts$RNA[,na.exclude(match(rosmap_meta$individualID_new, colnames(cts$RNA)))]
+}
+# cts = get_subcluster_data("^Exc\\.5$|^Exc\\.3$")
+# cts = get_subcluster_data("^Exc.*")
+# cts = get_subcluster_data("^Ast.*")
+# cts = get_subcluster_data("^Inh.*")
+# cts = get_subcluster_data("^Mic.*")
+# cts = get_subcluster_data(".*")
+# cts = get_subcluster_data("^Oli.*")
+cts = get_subcluster_data("^OPC.*")
+my_rosmap_meta = rosmap_meta[match(colnames(cts), rosmap_meta$individualID_new), ]
+
+```
+
+### Remove individuals with too few Exc3.5 neurons:
+
+```{r}
+#These individualIDs have fewer than 10 Exc3 or Exc5 counts:
+#Not all of these subjects will even be in cts as these include
+#subjects with cogdx ==3 or 6 
+rm_subjects = c('R2347173','R1583702','R2420066','R5394614','R5138383','R4240155','R9127940','R1207203','R4022468','R4119160')
+
+stopifnot(all(my_rosmap_meta$individualID_new == colnames(cts)))
+rm_idx_cts = which(colnames(cts) %in% rm_subjects)
+colnames(cts)[rm_idx_cts]
+my_rosmap_meta = my_rosmap_meta[-rm_idx_cts,]
+cts = cts[,-rm_idx_cts]
+stopifnot(all(my_rosmap_meta$individualID_new == colnames(cts)))
+```
+
+### Remove MT-genes from counts:
+
+```{r}
+mito_gene_idx = grep("^MT-",rownames(cts))
+cts = cts[-mito_gene_idx, ]
+```
+
+### Of the duplicate subjects, select those with higher counts:
+
+```{r}
+#Do this once, we will not rerun for each cell type:
+dupped_subs_idx = grep("-B[0-9]+", colnames(cts))
+dupped_subs_expr = cts[,dupped_subs_idx]
+summed_cnts_dup = colSums(dupped_subs_expr)
+rm_dup = c()
+# Loop through elements 1 to 23, comparing each to the next
+for (i in seq(1, length(summed_cnts_dup) - 1, by = 2)) {
+  if (summed_cnts_dup[i] < summed_cnts_dup[i + 1]) {
+    rm_dup <- c(rm_dup, names(summed_cnts_dup)[i])
+  } else {
+    rm_dup <- c(rm_dup, names(summed_cnts_dup)[i + 1])
+  }
+}
+#dups with less counts in exc3.5:
+rm_dup = c("R2144127-B52", "R2880377-B56", "R4817881-B53", "R4996203-B51", "R5447358-B36", "R5693901-B4",  "R6280004-B58", "R6679530-B60",
+"R7702934-B59", "R8724814-B46", "R8760165-B58", "R8781115-B43")
+
+#dups with less counts in pseudobulk:
+rm_dup = c("R2144127-B52", "R2880377-B40", "R4817881-B53", "R4996203-B51", "R5447358-B36", "R5693901-B4",  "R6280004-B50", "R6679530-B52",
+"R7702934-B59", "R8724814-B46", "R8760165-B48", "R8781115-B43")
+
+#rm_subjects in both counts and rosmap_metadata
+stopifnot(all(my_rosmap_meta$individualID_new == colnames(cts)))
+rm_idx = which(colnames(cts) %in% rm_dup)
+my_rosmap_meta = my_rosmap_meta[-rm_idx,]
+cts = cts[,-rm_idx]
+colnames(cts) = str_replace(colnames(cts), "-B[0-9]+", "")
+stopifnot(all(my_rosmap_meta$individualID == colnames(cts)))
+```
+
+### Normalize selected counts
+
+plotHeatmap(rownames(refCor), emat = as.data.frame(my_tmm), groupVec = my_rosmap_meta\$cond_cogdx)
+
+```{r}
+#create DGElist
+y <- DGEList(counts = cts, group = my_rosmap_meta$cond_cogdx)
+#default params for filterByExpression
+keep.genes = filterByExpr(y)
+# design = model.matrix(~cond_cogdx + batch_bin, data = my_rosmap_meta)
+# keep.genes = filterByExpr(y, design = design)
+
+# keep.genes[rownames(refCor)] = T #make sure genes needed for cormat are kept
+
+#filter out the genes
+y = y[keep.genes, , keep.lib.sizes=FALSE]
+
+my_tmm_DGE_obj <- calcNormFactors(y, method = "TMM")
+my_tmm = cpm(my_tmm_DGE_obj) #calculate tmms: https://www.biostars.org/p/317701/
+my_tmm = as.data.frame(my_tmm)
+plotHeatmap(rownames(refCor), emat = as.data.frame(my_tmm), groupVec = my_rosmap_meta$cond_cogdx)
+
+calcCCD(refCor, emat = as.data.frame(my_tmm), groupVec = my_rosmap_meta$cond_cogdx)
+
+calcDeltaCCD(refCor, as.data.frame(my_tmm), groupVec = my_rosmap_meta$cond_cogdx, groupNormal = 0)
+
+# For Microglia PER2 will be filtered out, uncomment to make CCD:
+# plotHeatmap(rownames(refCor)[-9], emat = as.data.frame(my_tmm), groupVec = my_rosmap_meta$cond_cogdx)
+# 
+# calcCCD(refCor[-9,-9], emat = as.data.frame(my_tmm), groupVec = my_rosmap_meta$cond_cogdx)
+# 
+# calcDeltaCCD(refCor[-9,-9], as.data.frame(my_tmm), groupVec = my_rosmap_meta$cond_cogdx, groupNormal = 0)
+
+```
+
+Make histograms of pmi by condition:
+
+```{r}
+# Create overlaid histograms
+ggplot(my_rosmap_meta, aes(x = pmi, fill = as.factor(cond_cogdx))) +
+  geom_histogram(position = "identity", alpha = 0.5, bins = 30) +
+  labs(title = "PMI by Condition", x = "PMI", y = "Frequency", fill = "Condition") +
+  theme_minimal()
+
+```
+
+The correlagrams of the Exc.3 and Exc.5 by themselves are bad. When you add them, the correlagram is great. Therefore the clusters could be in part based on the expression of a rhythmic gene. Below I will see that:
+
+```{r}
+cts3 = get_subcluster_data("Exc\\.3$")
+cts5 = get_subcluster_data("Exc\\.5$")
+
+sapply(rownames(refCor), function(x){
+  max1 = max(c(cts3[x,], cts5[x,]))
+  min1 = min(c(cts3[x,], cts5[x,]))
+  breaks = seq(max1, min1, length.out = 20)
+  c1 <- rgb(173,216,230,max = 255, alpha = 90, names = "lt.blue")
+  c2 <- rgb(255,192,203, max = 255, alpha = 90, names = "lt.pink")
+  h1 = hist(cts3[x,], plot = F, breaks = breaks)
+  h2 = hist(cts5[x,], plot = F, breaks = breaks)
+  max_y = max(c(h1$density, h2$density))
+  plot(h1, col = c1, main = x)
+  plot(h2, col = c2, add = T)
+  # boxplot(cts3[x,], cts5[x,], main = x)
+})
+```
+
+### Convert colnames of tmm to project_id:
+
+```{r}
+#Assumes the 12 duplicates have been resolved, if not, see below
+stopifnot(all(colnames(my_tmm) == my_rosmap_meta$individualID))
+colnames(my_tmm) = my_rosmap_meta$projid[match(colnames(my_tmm),my_rosmap_meta$individualID)]
+stopifnot(!(any(duplicated(colnames(my_tmm)))))
+
+#Uncomment if you have both version of 12 duplicate subects:
+# stopifnot(all(colnames(my_tmm) == my_rosmap_meta$individualID_new))
+# my_rosmap_meta$projid_new = my_rosmap_meta$projid
+# change_idx = grep("-B[0-9]+", my_rosmap_meta$individualID_new)
+# my_rosmap_meta$projid_new[change_idx] = paste0(my_rosmap_meta$projid[change_idx],"-B" ,my_rosmap_meta$batch[change_idx])
+# colnames(my_tmm) = my_rosmap_meta$projid_new[match(colnames(my_tmm), my_rosmap_meta$individualID_new)]
+# stopifnot(all(colnames(my_tmm) == my_rosmap_meta$projid_new))
+```
+
+### PCA the tmm
+
+```{r}
+#All Seed genes
+# CYCLOPS_seed_genes = c("DBP", "TEF", "ZNF580", "GFOD1", "CASTOR2", "ETV5", "FMNL1", "MAMLD1", "TM7SF2", "FPGS", "SYNJ2", "HLF", "KBTBD2", "MPP2", "MRGBP", "USP2", "CC2D1B", "GALNT9", "GSTT2B", "NR1D1", "SRSF5", "ZMAT3", "ARNTL", "FAM3A", "FOSL2", "HUNK", "MORN1", "NEXN", "SPHK2", "TRIM9", "ENC1", "GUF1", "IGFBP4", "PER2", "CRY1", "MRAS", "SFPQ", "ARRDC1", "CFAP46", "DNAJB1", "MKKS", "SARS2", "SEC14L1", "SETD4", "SLC6A6", "SPATA7", "TFR2", "PER1", "POR", "SLC16A1", "PER3", "NPAS2", "TSC22D3", "BHLHE41", "NR1D2", "LEO1", "STK35", "GRAMD4", "COQ10B", "DTX4", "PDZRN3", "DUSP11", "OPRL1", "LRRC39", "TRIM24", "RARA", "LDB1", "BHLHE40", "RSPO2", "TRAF5", "ANKRD12")
+
+#Seed genes used in final ordering:
+CYCLOPS_seed_genes = c("DBP", "TEF", "ZNF580", "GFOD1", "CASTOR2", "ETV5", "FMNL1", "MAMLD1", "TM7SF2", "FPGS", "SYNJ2", "HLF", "KBTBD2", "MPP2", "USP2", "CC2D1B", "GALNT9", "GSTT2B", "NR1D1", "SRSF5", "ZMAT3", "ARNTL", "FAM3A", "FOSL2", "HUNK", "MORN1", "NEXN", "SPHK2", "TRIM9", "ENC1", "GUF1", "PER2", "CRY1", "MRAS", "SFPQ", "ARRDC1", "CFAP46", "DNAJB1", "MKKS", "SARS2", "SEC14L1", "SETD4", "SLC6A6", "SPATA7", "TFR2", "PER1", "POR", "SLC16A1", "PER3", "NPAS2", "TSC22D3", "BHLHE41", "NR1D2", "LEO1", "STK35", "GRAMD4", "COQ10B", "DTX4", "PDZRN3", "DUSP11", "OPRL1", "LRRC39", "TRIM24", "RARA", "LDB1", "BHLHE40", "RSPO2", "TRAF5", "ANKRD12")
+
+CYCLOPS_seed_genes = CYCLOPS_seed_genes[which(CYCLOPS_seed_genes %in% rownames(my_tmm))]
+pc_res = prcomp(t(my_tmm), scale. = T)
+pc_res_seeds = prcomp(t(my_tmm[CYCLOPS_seed_genes,]), scale. = T)
+
+pc_res_rp = prcomp(t(my_tmm[grep("^RP[SL]", rownames(my_tmm)),]), scale. = T)
+
+plot_pcs = function(pc_res, colorvec, title, continuous = F){
+ if(!continuous){colorvec = as.factor(colorvec)}
+  p1 = ggplot(as.data.frame(pc_res$x), aes(x = PC1, y = PC2, color = colorvec))+geom_point() + {if(continuous)scale_color_gradient(low = "blue", high = "red")}
+  p2 = ggplot(as.data.frame(pc_res$x), aes(x = PC2, y = PC3, color = colorvec))+geom_point()+ {if(continuous)scale_color_gradient(low = "blue", high = "red")}
+  p3 = ggplot(as.data.frame(pc_res$x), aes(x = PC1, y = PC3, color = colorvec))+geom_point()+ {if(continuous)scale_color_gradient(low = "blue", high = "red")}
+  p4 = ggplot(as.data.frame(pc_res$x), aes(x = PC1, y = PC4, color = colorvec))+geom_point()+ {if(continuous)scale_color_gradient(low = "blue", high = "red")}
+  p5 = ggplot(as.data.frame(pc_res$x), aes(x = PC2, y = PC4, color = colorvec))+geom_point()+ {if(continuous)scale_color_gradient(low = "blue", high = "red")}
+  p6 = ggplot(as.data.frame(pc_res$x), aes(x = PC3, y = PC4, color = colorvec))+geom_point()+ {if(continuous)scale_color_gradient(low = "blue", high = "red")}
+  grid.arrange(p1, p2, p3,p4,p5, p6, nrow = 3, top=textGrob(title,gp=gpar(fontsize=12,font=3)))
+}
+
+plot_pcs(pc_res, my_rosmap_meta$batch_bin, "PCA All Genes, Seq. Batch")
+plot_pcs(pc_res_rp, my_rosmap_meta$batch_bin, "PCA Ribo Genes, Seq. Batch")
+plot_pcs(pc_res_seeds, my_rosmap_meta$batch_bin, "PCA CYCLOPS Seed Genes, Seq. Batch")
+
+plot_pcs(pc_res, my_rosmap_meta$msex, "PCA All Genes, Sex")
+plot_pcs(pc_res_seeds, my_rosmap_meta$msex, "PCA CYCLOPS Seed Genes, Sex")
+plot_pcs(pc_res_rp, my_rosmap_meta$msex, "PCA Ribo Genes, Sex")
+
+plot_pcs(pc_res, my_rosmap_meta$pmi, "PCA All Genes, PMI", continuous = T)
+plot_pcs(pc_res_seeds, my_rosmap_meta$pmi, "PCA CYCLOPS Seed Genes, PMI", continuous = T)
+plot_pcs(pc_res_rp, my_rosmap_meta$pmi, "PCA Ribo Genes, PMI", T)
+
+plot_pcs(pc_res, my_rosmap_meta$Study, "PCA All Genes, Study")
+plot_pcs(pc_res_seeds, my_rosmap_meta$Study, "PCA CYCLOPS Seed Genes, Study")
+plot_pcs(pc_res_rp, my_rosmap_meta$Study, "PCA Ribo Genes, Study")
+
+```
+
+Dive into 12 subjects with multiple sequencing batches:
+
+```{r}
+# # subs = c("R2144127","R2880377","R4817881","R4996203","R5447358","R5693901",
+# # "R6280004","R6679530","R7702934","R8724814","R8760165","R8781115")
+# subs = c("82317494") #subject recorded as B4 and B55 so what cluster is it in?
+# 
+# 
+# color_vec = my_rosmap_meta$batch_bin
+# 
+# p2 = ggplot(as.data.frame(pc_res$x), aes(x = PC2, y = PC3, color = color_vec, shape = (colnames(my_tmm)) %in% subs))+geom_point(size = 3)
+# p3 = ggplot(as.data.frame(pc_res$x), aes(x = PC1, y = PC3, color = color_vec, shape = (colnames(my_tmm)) %in% subs)) +geom_point(size = 3)
+# p4 = ggplot(as.data.frame(pc_res$x), aes(x = PC2, y = PC3, color = (colnames(my_tmm)) %in% subs))+geom_point(size = 3)
+# p5 = ggplot(as.data.frame(pc_res$x), aes(x = PC1, y = PC3, color = (colnames(my_tmm)) %in% subs)) +geom_point(size = 3)
+# grid.arrange(p2, p3,p4,p5, nrow = 2)
+```
+
+### Write Out TMM:
+
+```{r}
+setwd("../normed_counts/")
+out = rownames_to_column(my_tmm, var = "Gene_Symbols")
+covs = c("Cond_D", paste0("cond_", my_rosmap_meta$cond))
+covs1 = c("Batch_D", paste0("cond_", my_rosmap_meta$batch_bin))
+covs1 = str_replace(covs1, "\\[10,64\\)", "0")
+covs1 = str_replace(covs1, "\\[4,10\\)", "1")
+covs2 = c("ceradsc_D", paste0("cond_",  my_rosmap_meta$ceradsc_bin))
+covs3 = c("braaksc_D", paste0("cond_",  my_rosmap_meta$braaksc_bin))
+covs4 = c("sex_D", paste0("cond_", my_rosmap_meta$msex))
+#fill one missing pmi value to median of pmi's: hardcode answer as 6 so number doesn't change depending on cell subtype:
+my_rosmap_meta$pmi[which(is.na(my_rosmap_meta$pmi))] = 6 #median(my_rosmap_meta$pmi, na.rm = T)
+covs5 = c("pmi_C", my_rosmap_meta$pmi)
+
+out = rbind(covs, covs1, covs2, covs3, covs4, covs5, out)
+#Change filename depending on what cell type is selected
+write.table(out, "OPC_all_FiltByExprDefault_TMM.csv", sep = ',', row.names = F)
+
+```
+
+Write out rosmap_metadata for subjects used, only done once:
+
+```{r}
+# stopifnot(all(my_rosmap_meta$projid == colnames(my_tmm)))
+# my_rosmap_meta <- my_rosmap_meta %>%
+#    rename("Batch" = batch)
+# write.table(my_rosmap_meta, "../ROSMAP_metadata/cleaned_rosmapmeta_n409.csv", sep = ",", col.names = T, row.names = F)
+```
+
+### edgeR Differential Expression
+
+```{r}
+all(colnames(cts) == (my_rosmap_meta$individualID))
+
+#create DGElist
+y <- DGEList(counts = as.matrix(cts), group = my_rosmap_meta$cond_cogdx)
+#default params for filterByExpression
+keep.genes = filterByExpr(y)
+#filter out the genes
+y = y[keep.genes, , keep=FALSE]
+print(paste("keeping", dim(y)[1], "genes"))
+
+#Uncomment if you didn't run "write out tmm block"
+#ROSMAP metadata has 1 missing pmi, fill in with median:
+# my_rosmap_meta$pmi[which(is.na(my_rosmap_meta$pmi))] = 6
+
+design = model.matrix(~cond_cogdx + batch_bin + pmi + msex, data = my_rosmap_meta)
+
+y1 = estimateDisp(y, design)
+fit <- glmQLFit(y1, design)
+qlf <- glmQLFTest(fit, coef=2)
+topTags(qlf)
+```
+
+### Write out DE results
+
+```{r}
+setwd("../edgeR_diff_expression/")
+
+#write out qlf test
+qlf$table$FDR = p.adjust(qlf$table$PValue, method = "BH")
+
+write.table(qlf$table, "OPC_All/OPC_all_filtByExpr_edgeR_DE_QLFTest.csv", sep =',', row.names = T, col.names = NA )
+```

@@ -1,0 +1,448 @@
+---
+title: "Perform Downstream Analysis"
+output: html_notebook
+editor_options: 
+  chunk_output_type: inline
+---
+
+This notebook is for performing downstream analysis of CYCLOPS. It includes running cosinor regression and assessing differential rhythmicity (two ways for both), calling the enrichR API via python, using fgsea in R, running PSEA, outputing files for making KEGG map diagrams, etc.
+
+### Load Packages
+
+```{r Load Libraries, include=FALSE}
+library(reticulate) #use to find conda env for python
+library(tidyverse)
+source("./downstream_helpers/differential_rhyth_generalized.R")
+source("./downstream_helpers/create_rnk_files.R")
+source("./downstream_helpers/fgsea.R")
+source("./downstream_helpers/Files_for_Pscan.R")
+source("./downstream_helpers/Make_KEGG_map_files.R")
+source("./downstream_helpers/Check_TF_for_cycling_or_DR.R")
+source("./downstream_helpers/plot_clock_face_plots.R")
+source("./downstream_helpers/plot_gene_traces_generalized.R")
+source("./downstream_helpers/order_metabolon.R")
+source("./downstream_helpers/order_proteomics.R")
+```
+
+This notebook makes use of python via anaconda. Please make sure you install anaconda to proceed:
+
+```{r}
+conda_list()
+```
+
+Select your conda environment of choice, in my case, item 2 from list above:
+
+```{r}
+conda_list()[[2]][2] %>% 
+  use_condaenv(required = TRUE)
+print(paste("Using cond env:",conda_list()[[1]][2] ))
+```
+
+### Setup
+
+Select the CYCLOPS ordering path and path to data file and path to EdgeR differential expression results:
+
+```{r}
+#path to cyclops ordering
+path_to_cyclops_ordering = "../Cyclops_ordering/"
+
+#path to normalized counts
+path_to_tmm_file = "../normed_counts/ExcSubtypes35_FiltByExprDefault_TMM.csv"
+
+# optional path to file containing differential expression results
+edgeR_de_filename = "../edgeR_diff_expression/Exc3_5/Exc3_5_filtByExpr_edgeR_DE_QLFTest.csv"
+
+path_to_rosmap_clin = "../ROSMAP_metadata/cleaned_rosmapmeta_n409.csv"
+metabolon_filename = "../metabolic_data/ROSMAP_Metabolon_HD4_Brain514_assay_data.csv"
+metabolon_datakey = "../metabolic_data/ROSMAP_Metabolon_HD4_Data_Dictionary.csv"
+
+#BHQ corrected p cutoff to be considered cycling in analysis:
+isCyclingBHQCutoff = 0.1
+percentile = 0.
+useBatch = T
+```
+
+### Cosinor Regression and Differential Rhythmicity
+
+Run cosinor regression (2 methods), differential rhythmicity analysis, differential mesor analysis, differential rhythms by severity.
+
+```{r}
+
+#run custom cycling and differential rhythmicity analysis
+print("***Running cosinor and differential rhythms analysis***")
+run_cycling_and_dr_analysis(path_to_cyclops_ordering, path_to_tmm_file, path_to_rosmap_clin, isCyclingSigCutoff = isCyclingBHQCutoff, percentile = percentile, useBatch = useBatch)
+```
+
+### Focused look at core clock genes
+
+```{r}
+#Start with focused list of core clock genes
+clock_genes = c("ARNTL", "NPAS2","CLOCK","CRY1","CRY2","NR1D1","NR1D2",  "PER1","PER2","PER3","DBP","TEF","ARNTL2","RORA","FBXL3","CSNK1D","CSNK1E")
+#which of those genes are cycling in CTL?
+clock_cycling_CTL = read_csv(paste0(path_to_cyclops_ordering,"downstream_output/cosinor_results_CTL.csv"), show_col_types = F) %>% filter(Gene_Symbols %in% clock_genes, BHQ < isCyclingBHQCutoff) %>% dplyr::select(Gene_Symbols) %>% unname %>% unlist
+#which of those genes are cycling in AD?
+clock_cycling_AD = read_csv(paste0(path_to_cyclops_ordering, "downstream_output/cosinor_results_AD.csv"), show_col_types = F)%>% filter(Gene_Symbols %in% clock_genes, BHQ < isCyclingBHQCutoff) %>% dplyr::select(Gene_Symbols) %>% unname %>% unlist
+
+#Take union of those sets:
+clock_genes_cycling_either = union(clock_cycling_CTL, clock_cycling_AD)
+
+tmm = read_csv(path_to_tmm_file, show_col_types = FALSE)  #read expression data, unordered
+#Get CYCLOPS phases for subjects:
+cyc_pred_file = list.files(path = paste0(path_to_cyclops_ordering, "/Fits/"), pattern = '*Fit_Output_*')
+cyc_pred = read_csv(paste(path_to_cyclops_ordering, "Fits", cyc_pred_file[1], sep = '/'), show_col_types = FALSE)
+
+#perform diff_cycling analysis
+pb <- progress_bar$new(total = length(clock_genes_cycling_either))
+if(length(clock_genes_cycling_either) != 0){
+clock_diff_rhythms_results = diff_rhyth(cyc_pred, tmm, clock_genes_cycling_either, useBatch = useBatch, pb = pb, percentile = percentile)
+
+BHQCutoff_str = str_extract(as.character(isCyclingBHQCutoff), "(?<=\\.)\\d+")
+
+write.table(clock_diff_rhythms_results, paste0(path_to_cyclops_ordering, "/downstream_output/CoreClock_diff_rhythms_CyclingBHQ",BHQCutoff_str,".csv"), sep = ',', row.names = F, col.names = T)
+clock_diff_rhythms_results
+}
+```
+
+### Focused Look at AD GWAS genes
+
+from https://doi.org/10.1038/s41588-022-01024-z
+
+```{r}
+library(writexl)
+#AD GWAS genes
+GWAS_genes = c("ABCA1", "ABCA7", "ABI3", "ACE", "ADAM17", "ADAMTS1", "ANK3", "ANKH", "APH1B", "APP", "BCKDK", "BIN1", "BLNK", "CASS4", "CD2AP",
+"CLNK", "CLU", "COX7C", "CR1", "CTSB", "CTSH", "DOC2A", "EED", "EPDR1", "EPHA1", "FERMT2", "FOXF1", "GRN", "HLA-DQA1", "HS3ST5",
+"ICA1", "IDUA", "IGH", "IL34", "INPP5D", "JAZF1", "KLF16", "LILRB2", "MAF", "MINDY2", "MME", "MS4A4A", "MYO15A", "NCK2", "PLCG2",
+"PLEKHA1", "PRDM7", "PRKD3", "PTK2B", "RASGEF1C", "RBCK1", "RHOH", "SCIMP", "SEC61G", "SHARPIN", "SIGLEC11", "SLC24A4", "SLC2A4RG",
+"SNX1", "SORL1", "SORT1", "SPDYE3", "SPI1", "SPPL2A", "TMEM106B", "TNIP1", "TPCN1", "TREM2", "TREML2", "TSPAN14", "TSPOAP1",
+"UMAD1", "UNC5CL", "USP6NL", "WDR12", "WDR81", "WNT3")
+
+#which of those genes are cycling in CTL?
+GWAS_cycling_CTL_df = read_csv(paste0(path_to_cyclops_ordering,"downstream_output/cosinor_results_CTL.csv"), show_col_types = F) %>% filter(Gene_Symbols %in% GWAS_genes, BHQ < isCyclingBHQCutoff)
+
+GWAS_cycling_CTL = GWAS_cycling_CTL_df %>% dplyr::select(Gene_Symbols) %>% unname %>% unlist
+
+#which of those genes are cycling in AD?
+GWAS_cycling_AD_df = read_csv(paste0(path_to_cyclops_ordering, "downstream_output/cosinor_results_AD.csv"), show_col_types = F) %>% filter(Gene_Symbols %in% GWAS_genes, BHQ < isCyclingBHQCutoff)
+
+GWAS_cycling_AD = GWAS_cycling_AD_df%>% dplyr::select(Gene_Symbols) %>% unname %>% unlist
+
+#Take union of those sets:
+GWAS_genes_cycling_either = union(GWAS_cycling_CTL, GWAS_cycling_AD)
+
+tmm = read_csv(path_to_tmm_file, show_col_types = FALSE)  #read expression data, unordered
+#Get CYCLOPS phases for subjects:
+cyc_pred_file = list.files(path = paste0(path_to_cyclops_ordering, "/Fits/"), pattern = '*Fit_Output_*')
+cyc_pred = read_csv(paste(path_to_cyclops_ordering, "Fits", cyc_pred_file[1], sep = '/'), show_col_types = FALSE)
+
+#perform diff_cycling analysis
+pb <- progress_bar$new(total = length(GWAS_genes_cycling_either))
+if(length(GWAS_genes_cycling_either) != 0){
+GWAS_diff_rhythms_results = diff_rhyth(cyc_pred, tmm, GWAS_genes_cycling_either, useBatch = useBatch, pb = pb, percentile = percentile)
+
+BHQCutoff_str = str_extract(as.character(isCyclingBHQCutoff), "(?<=\\.)\\d+")
+
+diff_mesor_GWAS = read_csv(paste0(path_to_cyclops_ordering, "/downstream_output/differential_mesor_all_genes.csv"), show_col_types = F) %>% filter(Gene_Symbols %in% GWAS_genes) #%>% dplyr::select(!c(BHQ, Bonf))
+
+write_xlsx(list(GWAS_CTL_cycling = GWAS_cycling_CTL_df, GWAS_AD_cycling = GWAS_cycling_AD_df, GWAS_diff_rhyth = GWAS_diff_rhythms_results, GWAS_diff_mesor = diff_mesor_GWAS), path = paste0(path_to_cyclops_ordering, "/downstream_output/AD_GWAS_diff_rhythms_CyclingBHQ",BHQCutoff_str,".xlsx"))
+
+GWAS_diff_rhythms_results
+}
+```
+
+### Plotting
+
+With custom regression, I have to remake clock face plots, genes plots, etc.
+
+Make sure you have Julia installed and added to path: <https://julialang.org/downloads/platform/#optional_add_julia_to_path>
+
+```{r}
+setwd(path_to_cyclops_ordering)
+if (!(dir.exists("downstream_output/plots"))){
+  dir.create("downstream_output/plots")
+}
+
+
+#for cycling_in_CTL.csv
+plot_clock_face(paste0(path_to_cyclops_ordering, "/downstream_output/plots/CTL_clock_face_plot_AR1"), "downstream_output/cosinor_results_CTL.csv", mouse_data = mouse_data, BHQ_cutoff = isCyclingBHQCutoff, amp_ratio_cutoff = 0.1)
+plot_clock_face(paste0(path_to_cyclops_ordering, "/downstream_output/plots/CTL_clock_face_plot"), "downstream_output/cosinor_results_CTL.csv", mouse_data = mouse_data, BHQ_cutoff = isCyclingBHQCutoff, amp_ratio_cutoff = 0.0)
+setwd(path_to_cyclops_ordering)
+
+#for cycling_in_AD.csv
+plot_clock_face(paste0(path_to_cyclops_ordering, "/downstream_output/plots/AD_clock_face_plot_AR1"),"downstream_output/cosinor_results_AD.csv",mouse_data = mouse_data, BHQ_cutoff = isCyclingBHQCutoff, amp_ratio_cutoff = 0.1)
+plot_clock_face(paste0(path_to_cyclops_ordering, "/downstream_output/plots/AD_clock_face_plot"),"downstream_output/cosinor_results_AD.csv",mouse_data = mouse_data, BHQ_cutoff = isCyclingBHQCutoff, amp_ratio_cutoff = 0.0)
+
+#plot cyclops histogram
+plot_subject_histogram(path_to_cyclops_ordering, "cond_0")
+plot_subject_histogram(path_to_cyclops_ordering, "cond_1")
+
+#Gene Tracings
+genelist = c("ARNTL", "NPAS2", "CLOCK", "CRY1", "CRY2", "NR1D1", "NR1D2", "PER1", "PER2", "PER3", "DBP", "TEF")
+plot_genes(path_to_tmm_file, path_to_cyclops_ordering, genelist, useBatch = useBatch, percentile = percentile, split_cond_plots = T, save_pdf = T)
+
+plot_genes(path_to_tmm_file, path_to_cyclops_ordering, genelist, useBatch = useBatch, percentile = percentile, split_cond_plots = F, save_pdf = T)
+```
+
+Plot Other Genes
+
+```{r}
+#Ribosome genes
+plot_me = c("RPL18","RPS7","RPL22","RPS18","RPL8","RPL10A","RPS13","RPL14","RPS15A","RPS12","RPL36AL","RPL34","RPL30","RPL9","RPL21","RPS28","RPSA","RPL26","RPL27A","FAU","RPS3A","RPL7A","RPL17","RPS27A","RPS16","RPL15","RPLP1","RPL7","RPL10","RPL23A","RPL18A","RPL3","RPL12","RPL39","RPL37A","RPL37","RPS10","RPL13","RPL35A","RPS23","RPL13A","RPL38","RPS29","RPL24","RPL41","RPL35","RPS26","RPS2","RPS9","RPL32","RPL6","RPS21","RPS24","RPS25","RPL36","RPL19","RPS27","RPL29","RPS15","RPS3","RPS5","RPS8","RPL27","RSL24D1","RPS6","RPL11")
+
+#Add oxphos genes
+plot_me = c(plot_me, "ATP6V1G1","UQCR10","NDUFA5","NDUFA4" ,"COX6CP3",   "PPA2","ATP5MF","NDUFS7", "MT-CYB", "ATP6V0A1","ATP6V1G2","ATP6V0B", "ATP5PO","MT-CO2","MT-CO1","ATP6AP1","COX8C","MT-CO3" ,"COX5B", "COX4I1",  "ATP6V0A4" ,"ATP12A","MT-ATP6","MT-ATP8" ,"ATP5PD", "NDUFA2","NDUFA3",    "NDUFA1", "ATP5MC1P5","UQCRQ","ATP6V1H","ATP5F1D"  ,"LHPP","ATP6V0D2" ,"COX7A2L" ,"ATP5MC3","ATP6V1C2","ATP5MC2" ,"ATP5MC1" ,"ATP5PB" ,"ATP5F1E", "COX5A" ,"TCIRG1","UQCRHL" ,"ATP4B" ,"ATP6V1D" )
+
+plot_genes(path_to_tmm_file, path_to_cyclops_ordering, plot_me,useBatch = useBatch, percentile = percentile, split_cond_plots = T)
+```
+
+### EnrichR
+
+Call EnrichR API with python, supplying various lists from cycling and differential rhythm analysis.
+
+```{r}
+path = getwd()
+setwd(paste0(path_to_cyclops_ordering, "downstream_output"))
+path_no_space = gsub(" ", "\\ ", path, fixed = TRUE)
+#create list of filenames from the enrichR_files subfolder
+gene_lists = list.files("./enrichR_files/", pattern = "^(CTL_|AD_|diff_mesor)")
+
+#run system command to call python script that uses enrichR API
+sapply(gene_lists, function(x){
+  system(paste0("python3 ", path_no_space, "/downstream_helpers/Python_EnrichR_for_AnalysisPipeline.py -g \"enrichR_files/" ,x, "\" -b \"enrichR_files/EnrichR_background.csv\""))})
+
+isCyclingBHQCutoff_str = str_extract(as.character(isCyclingBHQCutoff), "(?<=\\.)\\d+")
+
+setwd("enrichR_files/")
+all_DR_gene_lists = list.files( pattern = "^(DR_)")
+method2_files = grepl("mthd2", all_DR_gene_lists)
+DR_gene_lists_method1 = all_DR_gene_lists[!method2_files]
+DR_backgrounds_method1 = paste0("diff_rhythms_CyclingBHQ", isCyclingBHQCutoff_str, "AmpRatio", str_replace(str_extract(DR_gene_lists_method1, pattern = "AR\\d+"), "AR", ""), ".csv")
+DR_gene_lists_method2 = all_DR_gene_lists[method2_files]
+DR_backgrounds_method2 = paste0("diff_rhythms_method2_CyclingBHQ", isCyclingBHQCutoff_str, "AmpRatio", str_replace(str_extract(DR_gene_lists_method2, pattern = "AR\\d+"), "AR", ""), ".csv")
+DR_gene_lists = c(DR_gene_lists_method1, DR_gene_lists_method2)
+DR_backgrounds = c(DR_backgrounds_method1, DR_backgrounds_method2)
+
+# repeat with differential gene lists
+setwd("..")
+mapply(function(x, y){
+  system(paste0("python3 ", path_no_space, "/downstream_helpers/Python_EnrichR_for_AnalysisPipeline.py -g \"enrichR_files/" ,x, "\" -b \"",y , "\""))},
+  DR_gene_lists,
+  DR_backgrounds)
+
+
+#AD severity
+AD_severity_lists = list.files("./enrichR_files/", pattern = "^strong_.*_diffs_AR20.csv")
+
+sapply(AD_severity_lists, function(x){
+  system(paste0("python3 ", path_no_space, "/downstream_helpers/Python_EnrichR_for_AnalysisPipeline.py -g \"enrichR_files/", x,"\" -b \"diff_rhythms_CyclingBHQ1AmpRatio20.csv\"")) })
+```
+
+### FGSEA
+
+```{r}
+path = getwd()
+setwd(path_to_cyclops_ordering)
+if (!(dir.exists("downstream_output/fGSEA"))){
+  dir.create("downstream_output/fGSEA")
+  dir.create("downstream_output/fGSEA/rnk_files")
+  dir.create("downstream_output/fGSEA/fGSEA_results")
+  dir.create("downstream_output/fGSEA/fGSEA_results/plots")
+}
+
+isCyclingBHQCutoff_str = str_extract(as.character(isCyclingBHQCutoff), "(?<=\\.)\\d+")
+
+#create rnk files
+write_rnks(path_to_cyclops_ordering, isCyclingBHQCutoff_str)
+
+#path of parent folder
+setwd(path)
+
+#Pathways, downloaded from MsigDB
+pathways <- c(gmtPathways("./MsigDB_gmts_for_GSEA/c2.cp.kegg_legacy.v2024.1.Hs.symbols.gmt"), gmtPathways("./MsigDB_gmts_for_GSEA/h.all.v2024.1.Hs.symbols.gmt"))
+
+
+gene_remapping_dict = read.delim("./MsigDB_gmts_for_GSEA/Human_Gene_Symbol_with_Remapping_MSigDB.v2024.1.Hs.chip", sep = '\t')
+
+setwd(paste(path_to_cyclops_ordering,"downstream_output", "fGSEA", "rnk_files", sep = "/"))
+
+rnk_files = list.files(pattern = ".rnk")
+
+run_fgsea(rnk_files, gene_remapping_dict, pathways, min_size = 10, max_size = 500)
+```
+
+Run fgsea on custom pathways
+
+(sleep related, BMAL KO, and AD GWAS genes)
+
+```{r}
+sleep_wake_pathways = c(gmtPathways("./MsigDB_gmts_for_GSEA/sleep_wake_pathways_w_human_orthologs.gmt"), gmtPathways("./MsigDB_gmts_for_GSEA/BMALKO_pathways_w_human_orthologs.gmt"), gmtPathways("./MsigDB_gmts_for_GSEA/AD_GWAS_genes.gmt"))
+
+
+gene_remapping_dict = read.delim("./MsigDB_gmts_for_GSEA/Human_Gene_Symbol_with_Remapping_MSigDB.v2024.1.Hs.chip", sep = '\t')
+
+
+if(!(dir.exists(paste0(path_to_cyclops_ordering, "downstream_output/fGSEA/fGSEA_results_sleep_wake")))){
+    dir.create(paste0(path_to_cyclops_ordering,"downstream_output/fGSEA/fGSEA_results_sleep_wake"))
+    dir.create(paste0(path_to_cyclops_ordering,"downstream_output/fGSEA/fGSEA_results_sleep_wake/plots"))
+}
+setwd(paste0(path_to_cyclops_ordering,"downstream_output/fGSEA/rnk_files"))
+rnk_files = list.files(pattern = ".rnk")
+#I dont want any remapping for these genes becase they are custom pathways
+#that by construction are found in my rosmap humans.
+run_fgsea(rnk_files, gene_dict = gene_remapping_dict, sleep_wake_pathways,dir = "fGSEA_results_sleep_wake", max_size = 5000) #make max_size big because these pathways of interest are large
+```
+
+### Phase Set Enrichment Analysis (PSEA)
+
+```{r}
+path = getwd()
+path_no_space = gsub(" ", "\\ ", path, fixed = TRUE)
+
+# List of pathways, downloaded from MsigDB, absolute paths
+psea_pathways <- c(paste0(getwd(), "/MsigDB_gmts_for_GSEA/c2.cp.kegg_legacy.v2024.1.Hs.symbols.gmt"), paste0(getwd(), "/MsigDB_gmts_for_GSEA/h.all.v2024.1.Hs.symbols.gmt"))
+
+# make sure no spaces when calling cmd
+psea_pathways = gsub(" ", "\\ ", psea_pathways, fixed = TRUE) 
+
+# change dir into PSEA directory
+setwd(paste0(path_to_cyclops_ordering,"/downstream_output/PSEA_files/"))
+
+#list PSEA input files (generated during cosinor regression/DR step)
+psea_files = list.files(pattern = "*.txt")
+
+#dataframe where rows are arguments to system, I will apply system call across rows
+arg_df = expand.grid(psea_files, psea_pathways) %>% 
+      mutate(out_dirs = paste(str_extract(string = as.character(Var1),     pattern= ".+(?=\\.txt)"), basename(as.character(Var2)) %>% str_extract(pattern= ".+(?=\\.gmt)")%>% 
+      gsub(pattern = "\\.", replacement = ""), sep = "_") )
+#apply system call, calling PSEA jar file, using rows of arg_df as arguments
+apply(arg_df, 1, function(a){
+    system(paste0("java -jar ", path_no_space, "/downstream_helpers/PSEA_cmd.jar ", 
+    a[[1]], " ", a[[2]]," ", a[[3]], " 10 10000 pdf"))
+        })
+```
+
+### Metabolon
+
+```{r}
+if (!(dir.exists(paste0(path_to_cyclops_ordering, "/metabolon")))){
+  dir.create(paste0(path_to_cyclops_ordering, "/metabolon"))
+  dir.create(paste0(path_to_cyclops_ordering, "/metabolon/plots"))
+}
+
+order_metabolon(metabolon_filename, metabolon_datakey, path_to_rosmap_clin, path_to_cyclops_ordering)
+```
+
+### Proteomics
+
+Make sure you have downloaded [**syn32835854**]{.underline}, [**syn21266449**]{.underline}, and [**syn51389605**]{.underline}. You can download programmatically with python or R synapse client. Make sure you specify the path to those downloads with *proteiomics_file_path.*
+
+```{r}
+tmt_filename = "2b.unlogged_relative_abundance-ROSMAP610.R1+R2-2xTAMPORcorrected.csv" #syn51389605
+# tmt_filename = "3.Regressed(age.sex.PMI-noDxProtect)_cleanDat-7814x610-ROSMAP610_R1+R2(Uniprot2019multiconsensus).csv"
+
+#make sure you have downloaded syn32835854,  syn21266449, and syn51389605
+if (!(dir.exists(paste0(path_to_cyclops_ordering, "/proteomics")))){
+  dir.create(paste0(path_to_cyclops_ordering, "/proteomics"))
+  dir.create(paste0(path_to_cyclops_ordering, "/proteomics/plots"))
+}
+
+order_prot( tmt_filename, path_to_cyclops_ordering, path_to_rosmap_clin, percentile = 0.0)
+```
+
+Plot Other Proteins
+
+```{r}
+plot_list = c("BPNT1|O95861", "PPM1B|O75688", "BLVRA|P53004", "HDHD2|Q9H0R4")
+
+tmt_filename = "2b.unlogged_relative_abundance-ROSMAP610.R1+R2-2xTAMPORcorrected.csv" #syn51389605
+# tmt_filename = "3.Regressed(age.sex.PMI-noDxProtect)_cleanDat-7814x610-ROSMAP610_R1+R2(Uniprot2019multiconsensus).csv"
+
+plot_prot( tmt_filename, path_to_cyclops_ordering, c("RPL10|P27635", "RPL32|P62910", "NDUFB1|O75438"), path_to_rosmap_clin, percentile = percentile)
+```
+
+fGSEA on proteomics
+
+```{r}
+path = getwd()
+setwd(path_to_cyclops_ordering)
+if (!(dir.exists("proteomics/fGSEA"))){
+  dir.create("proteomics/fGSEA")
+  dir.create("proteomics/fGSEA/rnk_files")
+  dir.create("proteomics/fGSEA/fGSEA_results")
+  dir.create("proteomics/fGSEA/fGSEA_results/plots")
+}
+
+isCyclingBHQCutoff_str = str_extract(as.character(isCyclingBHQCutoff), "(?<=\\.)\\d+")
+
+#path of parent folder
+setwd(path)
+
+write_prot_rnks(path_to_cyclops_ordering)
+
+#Pathways, downloaded from MsigDB
+pathways <- c(gmtPathways("./MsigDB_gmts_for_GSEA/c2.cp.kegg_legacy.v2024.1.Hs.symbols.gmt"), gmtPathways("./MsigDB_gmts_for_GSEA/h.all.v2024.1.Hs.symbols.gmt"))
+
+
+gene_remapping_dict = read.delim("./MsigDB_gmts_for_GSEA/Human_UniProt_IDs_MSigDB.v2024.1.Hs.chip", sep = '\t')
+
+setwd(paste0(path_to_cyclops_ordering,"/proteomics/fGSEA/rnk_files"))
+
+rnk_files = list.files(pattern = ".rnk")
+
+run_fgsea(rnk_files, gene_remapping_dict, pathways)
+```
+
+### Transcription Factor Analysis
+
+Now I search for transcription factors associated with my various gene lists, i.e, TF's associated with genes that lose amplitude in AD, etc.
+
+This step uses Selenium package in python and chrome to open the online PSCAN tool. If problems arise with chrome/selenium, you can use PSCAN manually at url: <http://159.149.160.88/pscan/>
+
+```{r}
+use_PRTN = F
+
+path = getwd()
+setwd(path_to_cyclops_ordering)
+abs_path_cyclops_ordering = getwd()
+setwd(path)
+
+#create pscan dir if does not exist:
+if(!(dir.exists(paste0(path_to_cyclops_ordering, "downstream_output/pscan")))){
+  dir.create(paste0(path_to_cyclops_ordering, "downstream_output/pscan") )
+}
+setwd(paste0(path_to_cyclops_ordering, "downstream_output"))
+
+#grab gene lists from enrichR files directory
+gene_lists = list.files("./enrichR_files/", pattern = "^(CTL_|AD_|DR_)")
+
+#write pscan input
+lapply(gene_lists, write_pscan_input)
+path_no_space = gsub(" ", "\\ ", path, fixed = TRUE)
+
+setwd("pscan/")
+pscan_files = list.files("./pscan_files/", pattern = ".csv$")
+
+sapply(pscan_files, function(x){
+system(paste0("python3 ", path_no_space, "/downstream_helpers/pscan_requests.py --file pscan_files/" ,x))})
+
+isCyclingBHQCutoff_str = str_extract(as.character(isCyclingBHQCutoff), "(?<=\\.)\\d+")
+
+if(exists("edgeR_de_filename")){
+  setwd("pscan_results")
+  pscan_result_files = list.files(pattern = ".csv$")
+  print("Searching cycling and DR results for pscan TF")
+  sapply(pscan_result_files, augment_tf_file, edgeR_de_filename, isCyclingBHQCutoff_str, abs_path_cyclops_ordering, use_PRTNS = use_PRTN)
+  setwd(paste0(abs_path_cyclops_ordering, "/downstream_output/enrichR_results"))
+  directories = list.files()
+  if(length(directories != 0)){
+    enrichR_TF_paths <- lapply(directories, function(dir) list.files(dir, full.names = TRUE, recursive = TRUE, pattern = ".*TRANSFACandJASPARPWMs_BCKGRND.*\\.csv|.*TranscriptionFactorPPIs_BCKGRND.*\\.csv"))
+  enrichR_TF_paths = flatten(enrichR_TF_paths) %>% paste0("./", .)  
+  sapply(enrichR_TF_paths, augment_tf_file, edgeR_de_filename, isCyclingBHQCutoff_str, abs_path_cyclops_ordering, use_PRTNS = use_PRTN)
+  
+  }else{
+    print("enrichR block above must be run before this step.")
+  }
+  
+}
+
+```

@@ -1,0 +1,2 @@
+eigendata on all subs, sqrt smoothness: 0.8404334 
+eigendata on norm subs, sqrt smoothness: 0.84917164 

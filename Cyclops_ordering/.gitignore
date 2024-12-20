@@ -1,0 +1,5 @@
+downstream_output/*
+All_downstream_output_stable*/
+.DS_Store
+downstream_output_Olig_all/
+downstream_output_OPC_all/

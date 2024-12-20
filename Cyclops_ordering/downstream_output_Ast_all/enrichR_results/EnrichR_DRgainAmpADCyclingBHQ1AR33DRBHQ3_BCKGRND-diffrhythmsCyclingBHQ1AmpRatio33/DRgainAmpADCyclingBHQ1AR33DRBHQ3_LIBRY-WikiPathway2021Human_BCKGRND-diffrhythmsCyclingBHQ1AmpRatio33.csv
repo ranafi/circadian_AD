@@ -1,0 +1,11 @@
+Rank,Term name,P-value,Z-score,Combined score,Overlapping genes,Adjusted p-value,Old p-value,Old adjusted p-value,gene count
+1,Type I collagen synthesis in the context of Osteogenesis imperfecta WP4786,0.003289422417488358,inf,inf,['TNFRSF11B'],0.01096474139162786,0,0,1
+2,Osteoblast Signaling WP322,0.003289422417488358,inf,inf,['TNFRSF11B'],0.01096474139162786,0,0,1
+3,Osteoclast Signaling WP12,0.003289422417488358,inf,inf,['TNFRSF11B'],0.01096474139162786,0,0,1
+4,RANKL/RANK signaling pathway WP2018,0.00657886819066632,inf,inf,['TNFRSF11B'],0.0109647803177772,0,0,1
+5,Ectoderm Differentiation WP2858,0.00657886819066632,inf,inf,['TNFRSF11B'],0.0109647803177772,0,0,1
+6,Monoamine Transport WP727,0.00657886819066632,inf,inf,['TNFRSF11B'],0.0109647803177772,0,0,1
+7,Apoptosis Modulation and Signaling WP1772,0.016447236096763778,inf,inf,['TNFRSF11B'],0.023496051566805398,0,0,1
+8,The Overlap Between Signal Transduction Pathways that Contribute to a Range of LMNA Laminopathies WP4879,0.01973669710035309,inf,inf,['TNFRSF11B'],0.024670871375441362,0,0,1
+9,Vitamin D Receptor Pathway WP2877,0.023026159643575562,inf,inf,['TNFRSF11B'],0.02558462182619507,0,0,1
+10,IL-18 signaling pathway WP4754,0.03289455397705514,inf,inf,['TNFRSF11B'],0.03289455397705514,0,0,1

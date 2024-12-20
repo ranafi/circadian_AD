@@ -1,0 +1,131 @@
+---
+title: "DE_downstream_analysis"
+format: html
+editor: visual
+---
+
+This file is for performing automatic downstream analysis of the differential expression results from edgeR
+
+### Load Libraries and select Conda env
+
+```{r}
+library(reticulate) #use to find conda env for python
+library(tidyverse)
+source("downstream_helpers/fgsea.R")
+conda_list()[[2]][2] %>% 
+  use_condaenv(required = TRUE)
+print(paste("Using cond env:",conda_list()[[1]][2] ))
+```
+
+```{r}
+# dir = "../edgeR_diff_expression/Ast_All/"
+# dir = "../edgeR_diff_expression/Exc3_5/"
+# dir = "../edgeR_diff_expression/Exc_All/"
+# dir = "../edgeR_diff_expression/Inhib_All/"
+dir = "../edgeR_diff_expression/Mglia_All/"
+
+```
+
+### Prepare Files
+
+```{r}
+
+setwd(dir)
+# exactTest_res = list.files(pattern = "*exactTest.csv", ignore.case = T)
+# edgeR_de_exacttest = read.csv(exactTest_res)
+# colnames(edgeR_de_exacttest)[1] = "Gene_Symbols"
+
+qlftest_res = list.files(pattern = "*QLFTest.csv")
+edgeR_de_qlftest = read.csv(qlftest_res)
+colnames(edgeR_de_qlftest)[1] = "Gene_Symbols"
+
+if (!(dir.exists("enrichR_files"))){
+  dir.create("enrichR_files")
+}
+
+# edgeR_de_exacttest_BHQ05 = filter(edgeR_de_exacttest, FDR < 0.05) %>% arrange(FDR) %>% dplyr::select(1)
+# edgeR_de_exacttest_BHQ01 = filter(edgeR_de_exacttest, FDR < 0.01) %>% arrange(FDR) %>% dplyr::select(1)
+# down_reg_exacttest_BHQ05 = filter(edgeR_de_exacttest, FDR < 0.05 & logFC < 0) %>% dplyr::select(1)
+# up_reg_exacttest_BHQ05 = filter(edgeR_de_exacttest, FDR < 0.05 & logFC > 0) %>% dplyr::select(1)
+
+edgeR_de_qlftest_BHQ05 = filter(edgeR_de_qlftest, FDR < 0.05) %>% arrange(FDR) %>% dplyr::select(1)
+
+edgeR_de_qlftest_BHQ01 = filter(edgeR_de_qlftest, FDR < 0.01) %>% arrange(FDR) %>% dplyr::select(1)
+
+down_reg_qlftest_BHQ05 = filter(edgeR_de_qlftest, FDR < 0.05 & logFC < 0) %>% dplyr::select(1)
+
+up_reg_qlftest_BHQ05 = filter(edgeR_de_qlftest, FDR < 0.05 & logFC > 0) %>% dplyr::select(1)
+
+background = dplyr::select(edgeR_de_qlftest, Gene_Symbols)
+
+# write.table(edgeR_de_exacttest_BHQ05, "enrichR_files/edgeR_de_exacttest_BHQ05.csv", sep = ',', col.names = T, row.names = F)
+# write.table(edgeR_de_exacttest_BHQ01, "enrichR_files/edgeR_de_exacttest_BHQ01.csv", sep = ',', col.names = T, row.names = F)
+# write.table(up_reg_exacttest_BHQ05, "enrichR_files/edgeR_de_UPReg_exacttest_BHQ05.csv", sep = ',', col.names = T, row.names = F)
+# write.table(down_reg_exacttest_BHQ05, "enrichR_files/edgeR_de_DOWNReg_exacttest_BHQ05.csv", sep = ',', col.names = T, row.names = F)
+
+write.table(edgeR_de_qlftest_BHQ05, "enrichR_files/edgeR_de_qlftest_BHQ05.csv", sep = ',', col.names = T, row.names = F)
+write.table(edgeR_de_qlftest_BHQ01, "enrichR_files/edgeR_de_qlftest_BHQ01.csv", sep = ',', col.names = T, row.names = F)
+write.table(up_reg_qlftest_BHQ05, "enrichR_files/edgeR_de_UPReg_qlftest_BHQ05.csv", sep = ',', col.names = T, row.names = F)
+write.table(down_reg_qlftest_BHQ05, "enrichR_files/edgeR_de_DOWNReg_qlftest_BHQ05.csv", sep = ',', col.names = T, row.names = F)
+
+write.table(background, "enrichR_files/EnrichR_background.csv", sep = ',', col.names = T, row.names = F)
+
+if (!(dir.exists("fGSEA"))){
+  dir.create("fGSEA")
+  dir.create("fGSEA/rnk_files")
+  dir.create("fGSEA/fGSEA_results")
+  dir.create("fGSEA/fGSEA_results/plots")
+}
+
+#create rnk files
+#ranked by pvalue of DE
+# edgeR_de_exacttest_minusLogPRanked =  mutate(edgeR_de_exacttest, metric = -log(PValue)) %>% arrange(PValue) %>% select(Gene_Symbols, metric)
+# write.table(edgeR_de_exacttest_minusLogPRanked, "fGSEA/rnk_files/edgeR_de_exacttest_minusLogPRanked.rnk", sep = '\t', col.names = F, row.names = F)
+
+#ranked by logFC
+# edgeR_de_exacttest_logfc_ranked =  mutate(edgeR_de_exacttest, metric = logFC) %>% arrange(desc(logFC)) %>% select(Gene_Symbols, metric)
+# write.table(edgeR_de_exacttest_logfc_ranked, "fGSEA/rnk_files/edgeR_de_exacttest_logfc_ranked.rnk", sep = '\t', col.names = F, row.names = F)
+
+
+edgeR_de_qlftest_minusLogPRanked =  mutate(edgeR_de_qlftest, metric = -log(PValue)) %>% arrange(PValue) %>% dplyr::select(Gene_Symbols, metric)
+write.table(edgeR_de_qlftest_minusLogPRanked, "fGSEA/rnk_files/edgeR_de_qlftest_minusLogPRanked.rnk", sep = '\t', col.names = F, row.names = F)
+
+#ranked by logFC
+edgeR_de_qlftest_logfc_ranked =  mutate(edgeR_de_qlftest, metric = logFC) %>% arrange(desc(logFC)) %>% dplyr::select(Gene_Symbols, metric)
+write.table(edgeR_de_qlftest_logfc_ranked, "fGSEA/rnk_files/edgeR_de_qlftest_logfc_ranked.rnk", sep = '\t', col.names = F, row.names = F)
+
+```
+
+### EnrichR
+
+```{r}
+path = getwd()
+print(path)
+path_no_space = gsub(" ", "\\ ", path, fixed = TRUE)
+setwd(dir)
+
+#get all enrichR files except background
+gene_lists = list.files("enrichR_files", pattern = "de_.*_BHQ.*\\.csv")
+
+#run system command to call python script that uses enrichR API
+sapply(gene_lists, function(x){
+  system(paste0("python3 ", path_no_space, "/downstream_helpers/Python_EnrichR_for_AnalysisPipeline.py -g \"./enrichR_files/" ,x, "\" -b \"./enrichR_files/EnrichR_background.csv\""))})
+
+```
+
+### FGSEA
+
+```{r}
+#Pathways, downloaded from MsigDB
+pathways <- c(gmtPathways("MsigDB_gmts_for_GSEA/c2.cp.kegg_legacy.v2024.1.Hs.symbols.gmt"), gmtPathways("MsigDB_gmts_for_GSEA/h.all.v2024.1.Hs.symbols.gmt"))
+
+
+gene_remapping_dict = read.delim("MsigDB_gmts_for_GSEA/Human_Gene_Symbol_with_Remapping_MSigDB.v2024.1.Hs.chip", sep = '\t')
+
+setwd(paste0(dir, "/fGSEA/rnk_files"))
+
+rnk_files = list.files(pattern = ".rnk")
+
+run_fgsea(rnk_files, gene_remapping_dict, pathways)
+
+```

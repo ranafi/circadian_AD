@@ -1,0 +1,4 @@
+Rank,Term name,P-value,Z-score,Combined score,Overlapping genes,Adjusted p-value,Old p-value,Old adjusted p-value,gene count
+1,CREB5 human,0.003289422417488358,inf,inf,['TNFRSF11B'],0.009868267252465073,0,0,1
+2,SMAD1 mouse,0.009868320682875124,inf,inf,['TNFRSF11B'],0.013157777064252864,0,0,1
+3,PPARG human,0.013157777064252864,inf,inf,['TNFRSF11B'],0.013157777064252864,0,0,1

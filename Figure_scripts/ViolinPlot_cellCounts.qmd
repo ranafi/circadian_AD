@@ -1,0 +1,64 @@
+---
+title: "ViolinPlot_cellCounts"
+format: html
+editor: visual
+---
+
+```{r}
+library(tidyverse)
+library(ggplot2)
+
+load("../rosmap437_pseudobulk_by_cluster_all_celltypes.rda")
+
+subs_used = read_csv("../ROSMAP_metadata/cleaned_rosmapmeta_n409.csv", show_col_types = F)
+
+cells_of_subs_used = cell_info %>% filter(individualID %in% subs_used$individualID_new)
+
+setdiff(unique(cells_of_subs_used$individualID), subs_used$individualID_new)
+setdiff(subs_used$individualID_new, unique(cells_of_subs_used$individualID))
+
+cells_of_subs_used = cells_of_subs_used %>%
+  mutate(cell.type = ifelse(cluster %in% c("CUX2-", "CUX2+"), "Excitatory", cluster))
+```
+
+Plot
+
+```{r}
+
+cell_counts <- cells_of_subs_used %>%
+  count(cell.type)
+
+ggplot(cell_counts, aes(x = cell.type, y = n)) +
+  geom_bar(stat = "identity", fill = "skyblue") +
+  labs(x = "Cell Type", y = "Number of Cells", title = "Number of Cells by Cell Type") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) # Rotate x-axis labels if needed
+```
+
+```{r}
+library(ggrastr)
+
+
+cells_of_subs_used$cell.type = as.factor(cells_of_subs_used$cell.type)
+library(ggplot2)
+
+p = ggplot(cells_of_subs_used, aes(x = cell.type, y = nCount_RNA, fill = cell.type)) +
+  ggrastr::rasterize(geom_point(position = position_jitter(seed = 1, width =0.2), size = 0.3, alpha = 0.5), dpi = 1200) +
+  geom_violin(trim = FALSE, alpha = 0.7) +
+  theme_minimal() +
+  labs(x = "Cell Type", y = "Counts") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1), legend.position = "none")+
+  theme(
+  # plot.title = element_text(size = 20),      # Title font size
+  axis.title = element_text(size = 14),     # Axis title font size
+  axis.text = element_text(size = 14),      # Axis text font size
+  legend.text = element_text(size = 12),    # Legend text font size
+  legend.title = element_text(size = 14)    # Legend title font size
+)
+
+```
+
+```{r}
+ggsave("~/Desktop/violinPlot_cellCounts.pdf", plot = p, width = 4, height = 4, units = "in")
+
+```

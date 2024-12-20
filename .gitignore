@@ -1,0 +1,7 @@
+normed_counts/*
+.DS_Store
+ROSMAP_metadata/*
+metabolic_data/*
+backup_cyclops_orderings/
+rosmap437_pseudobulk_by_cluster_all_celltypes.rda
+synapse_downloads/*

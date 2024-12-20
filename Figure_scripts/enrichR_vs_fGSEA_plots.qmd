@@ -1,0 +1,315 @@
+---
+title: "enrichR_vs_fGSEA_plots"
+format: html
+editor: visual
+---
+
+This file takes enrichR results and fgsea results, and uses fuzzyjoin to match the pathway names between the two, and plot the corrected significance. In my workflow, there is an enrichR result file for 1) all diff amplitude genes, 2) gain amplitude genes, and 3) lose amplitude genes. Depending on the plot you want, you supply that file with enrichR_path. With fgsea, I have result files for 1) genes differentially rhythmic between conditions ranked by p-value (EITHER gain or loss amplitude), and 2) genes ranked by log(AD_amp / CTL_amp). When comparing pathways associated with genes that lose or gain amp between enrichR and fgsea, I use that latter fgsea result file.
+
+IMPORTANT: in that case, keyword argument "fgsea_enrichment" needs to be set to "up" or "down", which selects only the positive or negative enrichment pathways (the gain or lose amplitude pathways).
+
+```{r}
+library(fuzzyjoin)
+library(tidyverse)
+library(stringr) 
+library(RColorBrewer)
+
+path_to_cyclops_ordering = "../Cyclops_ordering/"
+```
+
+## Define the Main Plotting Function:
+
+```{r}
+plot_fgsea_vs_enrichr = function(enrichR_path, fgsea_path, title,  marker_color = "#000000", libname = "KEGG", fgsea_enrichment = "all", color_limits = c(0,35), neg_axis_on_all_enrichment = T, max.overlaps = 9, point_padding = 0.25, label_padding = 0.1, box_padding = 0.35){
+  tryCatch({
+    fgsea_res = read_csv(fgsea_path, show_col_types = F)
+    enrichR_res = read_csv(enrichR_path, show_col_types = F)
+    #make pathway names lowercase
+    enrichR_res$pathway = enrichR_res$`Term name` %>% tolower() 
+    
+    #replace hyphens with spaces
+    enrichR_res$pathway = str_replace(enrichR_res$pathway,pattern = "-", " ")
+    
+    
+    #fgsea may have multiple libraries in same file (i.e. Kegg and Hallmark), filter for only libname:
+    fgsea_res = filter(fgsea_res, grepl(libname, fgsea_res$pathway, ignore.case = T))
+    #remove the "KEGG_" prefix from fgsea results:
+    fgsea_res$pathway  = fgsea_res$pathway%>% str_replace("KEGG_", "") %>% str_replace_all("_", " ") %>% tolower()
+    
+    plot_df = stringdist_join(enrichR_res, fgsea_res,
+                              by = "pathway",
+                              mode = "full",
+                              ignore_case = T,
+                              method = "lv",
+                              max_dist = 1,
+                              distance_col = "dist") %>%
+      group_by(pathway.x) %>%
+      slice_min(order_by = dist, n = 1) #only keep top match between fgsea and enrichR
+      plot_df = filter(plot_df, padj < 0.2 | `Adjusted p-value` < 0.2)
+    
+    if(fgsea_enrichment == "all"){
+      print("Using pos and neg enrichment scores")
+      # Define the number of colors you want in the palette
+      num_colors = 25
+      
+      # Create a red-to-blue color palette using RColorBrewer
+      color_palette = rev(colorRampPalette(brewer.pal(num_colors, "RdYlBu"))(num_colors))
+      
+
+      p = ggplot(plot_df, aes(NES, -log10(`Adjusted p-value`), color = -log10(padj), label = str_to_title(pathway.x)))+
+        geom_point(shape = 16, size = 5, alpha = .7)+
+        ggrepel::geom_text_repel(max.overlaps = max.overlaps, color = "black", point.padding = point_padding, label.padding = label_padding, box.padding = box_padding )+
+         #Most of the time, I want only negative NES to display,
+        #This is specific for my dataset.
+        {if(neg_axis_on_all_enrichment) scale_x_reverse()}+
+        {if(neg_axis_on_all_enrichment) xlim(0,-3.5)}+
+        ggtitle(str_wrap(title, 100))+
+        theme_minimal()+
+        # scale_color_gradientn(colors = color_palette, name = "fGSEA\n-Log10(BH.q)", limits = common_limits)+
+          scale_color_gradient2(limits = color_limits, low = "#4575b4", mid = "#ffffbf", high = "#d73027", midpoint = mean(color_limits), name = "fGSEA\n-Log10(BH.q)") +
+
+        # geom_vline(xintercept = 0, linetype = "dashed", color = "grey")+
+        xlab("fGSEA NES")+
+        ylab(" EnrichR -Log10(BH.q)")+
+        theme(
+    axis.text.x = element_text(size = 14),    # Increase x-axis text size
+    axis.text.y = element_text(size = 14),    # Increase y-axis text size
+    axis.title.x = element_text(size = 16),   # Increase x-axis title size
+    axis.title.y = element_text(size = 16),   # Increase y-axis title size
+    legend.title = element_text(size = 12)    # Increase legend title size
+  )
+
+      print(p)
+      return(plot_df)
+    }
+    if (fgsea_enrichment == "neg"){
+      print("Using only negative enrichment scores")
+      plot_df = filter(plot_df, ES < 0)
+    }else if(fgsea_enrichment == "pos"){
+      print("Using only positive enrichment scores")
+      plot_df = filter(plot_df, ES > 0)
+    }
+      
+      p = ggplot(plot_df, aes(-log10(padj), -log10(`Adjusted p-value`), label = str_to_title(pathway.x)))+
+        geom_point(shape = 16, size = 5, alpha = .4, color = marker_color)+
+        ggrepel::geom_text_repel(max.overlaps = max.overlaps)+
+        xlab("-Log10(fGSEA BH.q)")+
+        ylab("-Log10(enrichR BH.q)")+
+        ggtitle(str_wrap(title, 100))+
+        theme_minimal()
+      print(p)
+      return(plot_df)
+    
+  },
+  error = function(e){message(e)}
+  )  
+}
+
+
+check_file = function(file_path){
+# Check if the file exists
+  if (!file.exists(file_path)) {
+    print(paste("File", file_path, "does not exist."))
+  }
+}
+
+```
+
+Function takes in downstream directory and makes a bunch of plots using the helper function above:
+
+```{r}
+plot_cycling_and_dr_cycling= function(downstream_str){
+  setwd(paste0(path_to_cyclops_ordering,downstream_str ))
+    #CONTRL is cycling
+    enrichR_cyclingBHQ1AR20_CTL = "enrichR_results/EnrichR_CTLcyclersAR20BHQ1_BCKGRND-EnrichRbackground/CTLcyclersAR20BHQ1_LIBRY-KEGG2021Human_BCKGRND-EnrichRbackground.csv"
+    check_file(enrichR_cyclingBHQ1AR20_CTL)
+    
+  fgsea_CTL_cyclers_pranked = "fGSEA/fGSEA_results/CTL_cyclers_minusLogPRanked.csv"
+  check_file(fgsea_CTL_cyclers_pranked)
+  
+  plot_fgsea_vs_enrichr(enrichR_cyclingBHQ1AR20_CTL, fgsea_CTL_cyclers_pranked, "Pathways Cycling in CTL (Cycling BHQ1 AR20)", fgsea_enrichment = "pos", marker_color = "#0091ff")
+  
+  #AD is cycling
+  enrichR_cyclingBHQ1AR20_AD = "enrichR_results/EnrichR_ADcyclersAR20BHQ1_BCKGRND-EnrichRbackground/ADcyclersAR20BHQ1_LIBRY-KEGG2021Human_BCKGRND-EnrichRbackground.csv"
+  check_file(enrichR_cyclingBHQ1AR20_AD)
+  
+  fgsea_AD_cyclers_pranked = "fGSEA/fGSEA_results/AD_cyclers_minusLogPRanked.csv"
+  check_file(fgsea_AD_cyclers_pranked)
+  
+  plot_fgsea_vs_enrichr(enrichR_cyclingBHQ1AR20_AD, fgsea_AD_cyclers_pranked, "Pathways Cycing in AD (Cycling BHQ1 AR20)", fgsea_enrichment = "pos", marker_color = "red")
+  
+  #AD gain cycling
+  enrichR_gainCycling_BHQ1AR20 = "enrichR_results/EnrichR_DRgainAmpADCyclingBHQ1AR20DRBHQ3_BCKGRND-diffrhythmsCyclingBHQ1AmpRatio20/DRgainAmpADCyclingBHQ1AR20DRBHQ3_LIBRY-KEGG2021Human_BCKGRND-diffrhythmsCyclingBHQ1AmpRatio20.csv"
+  check_file(enrichR_gainCycling_BHQ1AR20)
+  
+  fgsea_AD_gain_cyclers25 = "fGSEA/fGSEA_results/DRgenesAmpRatio20_Log(AD-CTL)ranked.csv"
+  check_file(fgsea_AD_gain_cyclers25)
+  
+  plot_fgsea_vs_enrichr(enrichR_gainCycling_BHQ1AR20, fgsea_AD_gain_cyclers25, "Pathways Gain Rhythmicity in AD (Cycling BHQ1 AR20)", fgsea_enrichment = "pos", marker_color = "#D81B60")
+  
+   enrichR_gainCycling_BHQ1AR1 = "enrichR_results/EnrichR_DRgainAmpADCyclingBHQ1AR1DRBHQ3_BCKGRND-diffrhythmsCyclingBHQ1AmpRatio1/DRgainAmpADCyclingBHQ1AR1DRBHQ3_LIBRY-KEGG2021Human_BCKGRND-diffrhythmsCyclingBHQ1AmpRatio1.csv"
+   check_file(enrichR_gainCycling_BHQ1AR1)
+   
+  fgsea_AD_gain_cyclers1 = "fGSEA/fGSEA_results/DRgenesAmpRatio1_Log(AD-CTL)ranked.csv"
+  check_file(fgsea_AD_gain_cyclers1)
+  
+  plot_fgsea_vs_enrichr(enrichR_gainCycling_BHQ1AR1, fgsea_AD_gain_cyclers1, "Pathways Gain Rhythmicity in AD (Cycling BHQ1 AR1)", fgsea_enrichment = "pos",  marker_color = "#D81B60")
+
+  #AD lose cycling
+  enrichR_loseCycling_BHQ1AR20 = "enrichR_results/EnrichR_DRlostAmpADCyclingBHQ1AR20DRBHQ3_BCKGRND-diffrhythmsCyclingBHQ1AmpRatio20/DRlostAmpADCyclingBHQ1AR20DRBHQ3_LIBRY-KEGG2021Human_BCKGRND-diffrhythmsCyclingBHQ1AmpRatio20.csv"
+  check_file(enrichR_loseCycling_BHQ1AR20)
+  
+  fgsea_AD_lose_cyclers25 = "fGSEA/fGSEA_results/DRgenesAmpRatio20_Log(AD-CTL)ranked.csv"
+  check_file(fgsea_AD_lose_cyclers25)
+  
+  plot_fgsea_vs_enrichr(enrichR_loseCycling_BHQ1AR20, fgsea_AD_lose_cyclers25, "Pathways Lose Rhythmicity in AD (Cycling BHQ1 AR20)", fgsea_enrichment = "neg", marker_color = "#FE6100")
+
+  enrichR_loseCycling_BHQ1AR1 = "enrichR_results/EnrichR_DRlostAmpADCyclingBHQ1AR1DRBHQ3_BCKGRND-diffrhythmsCyclingBHQ1AmpRatio1/DRlostAmpADCyclingBHQ1AR1DRBHQ3_LIBRY-KEGG2021Human_BCKGRND-diffrhythmsCyclingBHQ1AmpRatio1.csv"
+  check_file(enrichR_loseCycling_BHQ1AR1)
+  
+ fgsea_AD_lose_cyclers1 = "fGSEA/fGSEA_results/DRgenesAmpRatio1_Log(AD-CTL)ranked.csv"
+ check_file(fgsea_AD_lose_cyclers1)
+ 
+  plot_fgsea_vs_enrichr(enrichR_loseCycling_BHQ1AR1, fgsea_AD_lose_cyclers1, "Pathways Lose Rhythmicity in AD (Cycling BHQ1 AR1)", fgsea_enrichment = "neg", marker_color = "#FE6100")
+  
+  #Both AD gain and lose on same plot
+  #AR20 threshold
+  enrichR_DRCycling_BHQ1AR20 = "enrichR_results/EnrichR_DRcyclersCyclingBHQ1AR20DRBHQ3_BCKGRND-diffrhythmsCyclingBHQ1AmpRatio20/DRcyclersCyclingBHQ1AR20DRBHQ3_LIBRY-KEGG2021Human_BCKGRND-diffrhythmsCyclingBHQ1AmpRatio20.csv"
+  check_file(enrichR_DRCycling_BHQ1AR20)
+  fgsea_log_ad_ctl_amp = "fGSEA/fGSEA_results/DRgenesAmpRatio20_Log(AD-CTL)ranked.csv"
+  check_file(fgsea_log_ad_ctl_amp)
+    plot_fgsea_vs_enrichr(enrichR_DRCycling_BHQ1AR20, fgsea_log_ad_ctl_amp, "Differentially Rhythmic Pathways in AD (Cycling BHQ1 AR20)", fgsea_enrichment = "all")
+    
+    ggsave(paste0("~/Desktop/", downstream_str,"_diff_rhythms_fGSEA_v_enrichR_BHQ1AR20.pdf"), device = "pdf", width = 5.7, height = 3.2, units = "in")
+    
+    #AR1 threshold
+    enrichR_DRCycling_BHQ1AR1 = "enrichR_results/EnrichR_DRcyclersCyclingBHQ1AR1DRBHQ3_BCKGRND-diffrhythmsCyclingBHQ1AmpRatio1/DRcyclersCyclingBHQ1AR1DRBHQ3_LIBRY-KEGG2021Human_BCKGRND-diffrhythmsCyclingBHQ1AmpRatio1.csv"
+    check_file(enrichR_DRCycling_BHQ1AR1)
+    fgsea_log_ad_ctl_amp = "fGSEA/fGSEA_results/DRgenesAmpRatio1_Log(AD-CTL)ranked.csv"
+    check_file(fgsea_log_ad_ctl_amp)
+    plot_fgsea_vs_enrichr(enrichR_DRCycling_BHQ1AR1, fgsea_log_ad_ctl_amp, "Differentially Rhythmic Pathways in AD (Cycling BHQ1AR1)", fgsea_enrichment = "all")
+    
+    ggsave(paste0("~/Desktop/", downstream_str,"_diff_rhythms_fGSEA_v_enrichR_BHQ1AR1.pdf"), device = "pdf", width = 5.7, height = 3.2, units = "in")
+
+}
+
+#List available downstream output dirs
+list.files(path_to_cyclops_ordering, pattern = "downstream_output*")
+```
+
+## Cycling fgsea vs enrichR
+
+### Excitatory Neurons (all) cycling in CTL plot for fig 1
+
+```{r}
+downstream_str = "downstream_output_Exc_all"
+setwd(paste0(path_to_cyclops_ordering,downstream_str ))
+
+enrichR_cyclingBHQ1AR20_CTL = "enrichR_results/EnrichR_CTLcyclersAR20BHQ1_BCKGRND-EnrichRbackground/CTLcyclersAR20BHQ1_LIBRY-KEGG2021Human_BCKGRND-EnrichRbackground.csv"
+    check_file(enrichR_cyclingBHQ1AR20_CTL)
+    
+fgsea_CTL_cyclers_pranked = "fGSEA/fGSEA_results/CTL_cyclers_minusLogPRanked.csv"
+check_file(fgsea_CTL_cyclers_pranked)
+  
+plot_fgsea_vs_enrichr(enrichR_cyclingBHQ1AR20_CTL, fgsea_CTL_cyclers_pranked, "Exc All Pathways Cycling in CTL (Cycling BHQ1 AR20)", fgsea_enrichment = "all", neg_axis_on_all_enrichment = F, color_limits = c(0,20))
+
+ggsave("~/Desktop/Exc_All_Cycling_CTL_fGSEA_vs_enrichR.pdf", device = "pdf", width = 5, height = 5, units = "in")
+```
+
+### Inhibitory neurons cycling
+
+```{r}
+downstream_str = "downstream_output_Inhib_all"
+setwd(paste0(path_to_cyclops_ordering,downstream_str ))
+
+enrichR_cyclingBHQ1AR20_CTL = "enrichR_results/EnrichR_CTLcyclersAR20BHQ1_BCKGRND-EnrichRbackground/CTLcyclersAR20BHQ1_LIBRY-KEGG2021Human_BCKGRND-EnrichRbackground.csv"
+    check_file(enrichR_cyclingBHQ1AR20_CTL)
+    
+fgsea_CTL_cyclers_pranked = "fGSEA/fGSEA_results/CTL_cyclers_minusLogPRanked.csv"
+check_file(fgsea_CTL_cyclers_pranked)
+  
+plot_fgsea_vs_enrichr(enrichR_cyclingBHQ1AR20_CTL, fgsea_CTL_cyclers_pranked, "Inhib All Pathways Cycling in CTL (Cycling BHQ1 AR20)", fgsea_enrichment = "all", neg_axis_on_all_enrichment = F, color_limits = c(0,20))
+ggsave("~/Desktop/Inhib_All_Cycling_CTL_fGSEA_vs_enrichR.pdf", device = "pdf", width = 5, height = 5, units = "in")
+```
+
+### Astrocytes Cycling
+
+```{r}
+downstream_str = "downstream_output_Ast_all"
+setwd(paste0(path_to_cyclops_ordering,downstream_str ))
+
+enrichR_cyclingBHQ1AR20_CTL = "enrichR_results/EnrichR_CTLcyclersAR20BHQ1_BCKGRND-EnrichRbackground/CTLcyclersAR20BHQ1_LIBRY-KEGG2021Human_BCKGRND-EnrichRbackground.csv"
+    check_file(enrichR_cyclingBHQ1AR20_CTL)
+    
+fgsea_CTL_cyclers_pranked = "fGSEA/fGSEA_results/CTL_cyclers_minusLogPRanked.csv"
+check_file(fgsea_CTL_cyclers_pranked)
+  
+plot_fgsea_vs_enrichr(enrichR_cyclingBHQ1AR20_CTL, fgsea_CTL_cyclers_pranked, "Ast All Pathways Cycling in CTL (Cycling BHQ1 AR20)", fgsea_enrichment = "all", neg_axis_on_all_enrichment = F, color_limits = c(0,40))
+ggsave("~/Desktop/Ast_All_Cycling_CTL_fGSEA_vs_enrichR.pdf", device = "pdf", width = 5, height = 5, units = "in")
+```
+
+### Mglia Cycling
+
+```{r}
+downstream_str = "downstream_output_Mglia_all"
+setwd(paste0(path_to_cyclops_ordering,downstream_str ))
+
+enrichR_cyclingBHQ1AR20_CTL = "enrichR_results/EnrichR_CTLcyclersAR20BHQ1_BCKGRND-EnrichRbackground/CTLcyclersAR20BHQ1_LIBRY-KEGG2021Human_BCKGRND-EnrichRbackground.csv"
+    check_file(enrichR_cyclingBHQ1AR20_CTL)
+    
+fgsea_CTL_cyclers_pranked = "fGSEA/fGSEA_results/CTL_cyclers_minusLogPRanked.csv"
+check_file(fgsea_CTL_cyclers_pranked)
+  
+plot_fgsea_vs_enrichr(enrichR_cyclingBHQ1AR20_CTL, fgsea_CTL_cyclers_pranked, "Mic All Pathways Cycling in CTL (Cycling BHQ1 AR20)", fgsea_enrichment = "all", neg_axis_on_all_enrichment = F, color_limits = c(0,20))
+ggsave("~/Desktop/Mglia_All_Cycling_CTL_fGSEA_vs_enrichR.pdf", device = "pdf", width = 5, height = 5, units = "in")
+```
+
+## Differentially rhythmic, and other various plots
+
+### Excitatory Neurons (all)
+
+```{r}
+plot_cycling_and_dr_cycling("downstream_output_Exc_All")
+
+```
+
+### Excitatory Neurons 3&5
+
+```{r}
+# plot_cycling_and_dr_cycling("downstream_output_Exc3_5")
+#I no longer call plot_cycling_and_dr_cycling() for this cell type because I want to look at the ampRatio33 files
+downstream_str = "downstream_output_Exc3_5"
+setwd(paste0(path_to_cyclops_ordering,downstream_str ))
+enrichR_DRCycling_BHQ1AR33 = "enrichR_results/EnrichR_DRcyclersCyclingBHQ1AR33DRBHQ3_BCKGRND-diffrhythmsCyclingBHQ1AmpRatio33/DRcyclersCyclingBHQ1AR33DRBHQ3_LIBRY-KEGG2021Human_BCKGRND-diffrhythmsCyclingBHQ1AmpRatio33.csv"
+check_file(enrichR_DRCycling_BHQ1AR33)
+fgsea_log_ad_ctl_amp = "fGSEA/fGSEA_results/DRgenesAmpRatio20_Log(AD-CTL)ranked.csv"
+check_file(fgsea_log_ad_ctl_amp)
+plot_fgsea_vs_enrichr(enrichR_DRCycling_BHQ1AR33, fgsea_log_ad_ctl_amp, "Excitatory Neurons 3&5", fgsea_enrichment = "all", max.overlaps = 4)
+
+```
+
+### Inhib Neurons
+
+```{r}
+plot_cycling_and_dr_cycling("downstream_output_Inhib_All")
+```
+
+### Astrocytes
+
+```{r}
+# plot_cycling_and_dr_cycling("downstream_output_Ast_All")
+```
+
+### Microglia
+
+```{r}
+plot_cycling_and_dr_cycling("downstream_output_Mglia_All")
+# downstream_str = "downstream_output_Mglia_All"
+# setwd(paste0(path_to_cyclops_ordering,downstream_str ))
+# #Both AD gain and lose on same plot
+#   enrichR_DRCycling_BHQ1AR20 = "enrichR_results/EnrichR_DRcyclersCyclingBHQ1AR20DRBHQ3_BCKGRND-diffrhythmsCyclingBHQ1AmpRatio20/DRcyclersCyclingBHQ1AR20DRBHQ3_LIBRY-KEGG2021Human_BCKGRND-diffrhythmsCyclingBHQ1AmpRatio20.csv"
+#   check_file(enrichR_DRCycling_BHQ1AR20)
+#   fgsea_log_ad_ctl_amp = "fGSEA/fGSEA_results/DRgenesAmpRatio20_Log(AD-CTL)ranked.csv"
+#   check_file(fgsea_log_ad_ctl_amp)
+#     plot_fgsea_vs_enrichr(enrichR_DRCycling_BHQ1AR20, fgsea_log_ad_ctl_amp, "Differentially Rhythmic Pathways in AD (Cycling BHQ1 AR20)", fgsea_enrichment = "all", max.overlaps = 10, point_padding = .25, label_padding = 0.1, box_padding  = 0.35)
+```

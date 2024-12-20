@@ -1,0 +1,3 @@
+Rank,Term name,P-value,Z-score,Combined score,Overlapping genes,Adjusted p-value,Old p-value,Old adjusted p-value,gene count
+1,Amyotrophic lateral sclerosis,0.11917429865412349,9.778248587570621,20.799979084568037,['NEFH'],0.15236893346717648,0,0,1
+2,Pathways of neurodegeneration,0.15236893346717648,7.467391304347826,14.049527141718858,['NEFH'],0.15236893346717648,0,0,1

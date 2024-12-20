@@ -1,0 +1,3 @@
+Rank,Term name,P-value,Z-score,Combined score,Overlapping genes,Adjusted p-value,Old p-value,Old adjusted p-value,gene count
+1,Osteoclast differentiation,0.016447236096763778,inf,inf,['TNFRSF11B'],0.02631562343367962,0,0,1
+2,Cytokine-cytokine receptor interaction,0.02631562343367962,inf,inf,['TNFRSF11B'],0.02631562343367962,0,0,1

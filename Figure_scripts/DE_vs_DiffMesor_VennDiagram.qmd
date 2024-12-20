@@ -1,0 +1,388 @@
+---
+title: "DE_vs_DiffMesor_VennDiagram"
+format: html
+editor: visual
+---
+
+### Create dirs
+
+```{r}
+library(tidyverse)
+library(ggvenn)
+library(reticulate) #use to find conda env for python
+if (!(dir.exists("DiffMesor_DiffRhyth_vs_DiffExpr"))){
+  dir.create("DiffMesor_DiffRhyth_vs_DiffExpr")
+  dir.create("DiffMesor_DiffRhyth_vs_DiffExpr/enrichR_files")
+  dir.create("DiffMesor_DiffRhyth_vs_DiffExpr/enrichR_results")
+  dir.create("DiffMesor_DiffRhyth_vs_DiffExpr/fGSEA")
+  dir.create("DiffMesor_DiffRhyth_vs_DiffExpr/fGSEA/rnk_files")
+  dir.create("DiffMesor_DiffRhyth_vs_DiffExpr/fGSEA/fGSEA_results")
+  dir.create("DiffMesor_DiffRhyth_vs_DiffExpr/fGSEA/fGSEA_results/plots")
+
+}
+```
+
+```{r}
+conda_list()
+```
+
+Select your conda environment of choice, in my case, item 2 from list above:
+
+```{r}
+conda_list()[[2]][2] %>% 
+  use_condaenv(required = TRUE)
+print(paste("Using cond env:",conda_list()[[1]][2] ))
+```
+
+### Define Venn Functions
+
+```{r}
+make_venn = function(diff_mesor_file, path_to_DE, path_to_DR, my_title, mesor_signif_cutoff = 0.05, de_signif_cutoff = 0.05, DR_BHQ_cutoff = 0.3, lfc_cutoff = 0, save_plots = T){
+  
+Diff_mesor = read_csv(diff_mesor_file, show_col_types = F) 
+all_genes = dplyr::select(Diff_mesor, Gene_Symbols)
+Diff_mesor = Diff_mesor %>%  filter(BHQ < mesor_signif_cutoff)
+
+Diff_rhyth = read_csv(path_to_DR, show_col_types = F)
+# DR_background = dplyr::select(Diff_rhyth, Gene_Symbols)
+Diff_rhyth = dplyr::filter(Diff_rhyth, BHQ < DR_BHQ_cutoff)
+
+## Differential Expression
+qlf_test = read_csv(path_to_DE, show_col_types = F) %>% 
+  filter(FDR < de_signif_cutoff & abs(logFC) >= lfc_cutoff)
+
+DM_not_DE = setdiff(Diff_mesor$Gene_Symbols, qlf_test$...1)
+DE_not_DM = setdiff(qlf_test$...1, Diff_mesor$Gene_Symbols)
+DM_AND_DE = intersect(Diff_mesor$Gene_Symbols, qlf_test$...1)
+
+DR_not_DE = setdiff(Diff_rhyth$Gene_Symbols, qlf_test$...1)
+DE_not_DR = setdiff(qlf_test$...1, Diff_rhyth$Gene_Symbols)
+DR_AND_DE = intersect(Diff_rhyth$Gene_Symbols, qlf_test$...1)
+
+x <- list(
+  `Diff.  Mesor` = Diff_mesor$Gene_Symbols, 
+  `Diff. Expr.` = qlf_test$...1
+)
+
+p1 = ggvenn(
+  x, 
+  fill_color = c("#0073C2FF", "#EFC000FF"),
+  show_percentage = F,
+  auto_scale = T,
+  stroke_size = 0.02, set_name_size = 4
+)+ggtitle(my_title)
+print(p1)
+plot_title = gsub("\\.\\s|\\s|,", "_", my_title)
+if(save_plots){
+  ggsave(paste0("DiffMesor_DiffRhyth_vs_DiffExpr/VennDiagram_DM_vs_DE_", plot_title, ".pdf"),plot = p1)
+  
+write.table(c("Gene_Symbols", DM_not_DE), paste0("DiffMesor_DiffRhyth_vs_DiffExpr/enrichR_files/",plot_title ,"_DM_not_DE.csv"), sep = ',', row.names = F, col.names = F)
+write.table(c("Gene_Symbols", DE_not_DM), paste0("DiffMesor_DiffRhyth_vs_DiffExpr/enrichR_files/",plot_title ,"_DE_not_DM.csv"), sep = ',', row.names = F, col.names = F)
+write.table(c("Gene_Symbols", DM_AND_DE), paste0("DiffMesor_DiffRhyth_vs_DiffExpr/enrichR_files/",plot_title ,"_DM_AND_DE.csv"), sep = ',', row.names = F, col.names = F)
+write.table(all_genes, paste0("DiffMesor_DiffRhyth_vs_DiffExpr/enrichR_files/", plot_title, "_background.csv"), sep = ',', col.names = T, row.names = F)
+}
+
+
+x2 = list(
+  `Diff. Rhyth` = Diff_rhyth$Gene_Symbols,
+  `Diff. Expr.` = qlf_test$...1
+)
+
+p2 = ggvenn(
+  x2,
+    fill_color = c("#0073C2FF", "#EFC000FF"),
+  show_percentage = F,
+  auto_scale = T,
+  stroke_size = 0.02, set_name_size = 4
+)+ggtitle(my_title)
+print(p2)
+plot_title = gsub("\\.\\s|\\s|,", "_", my_title)
+
+if(save_plots){
+  ggsave(paste0("DiffMesor_DiffRhyth_vs_DiffExpr/VennDiagram_DR_vs_DE_", plot_title, ".pdf"),plot = p2)
+  
+write.table(c("Gene_Symbols", DR_not_DE), paste0("DiffMesor_DiffRhyth_vs_DiffExpr/enrichR_files/",plot_title ,"_DR_not_DE.csv"), sep = ',', row.names = F, col.names = F)
+write.table(c("Gene_Symbols", DE_not_DR), paste0("DiffMesor_DiffRhyth_vs_DiffExpr/enrichR_files/",plot_title ,"_DE_not_DR.csv"), sep = ',', row.names = F, col.names = F)
+write.table(c("Gene_Symbols", DR_AND_DE), paste0("DiffMesor_DiffRhyth_vs_DiffExpr/enrichR_files/",plot_title ,"_DR_AND_DE.csv"), sep = ',', row.names = F, col.names = F)
+
+}
+
+x3 = list(
+    `Diff. Mesor` = Diff_mesor$Gene_Symbols,
+    `Diff. Expr.` = qlf_test$...1,
+    `Diff. Rhyth` = Diff_rhyth$Gene_Symbols
+)
+p3 = ggvenn(
+  x3,
+    fill_color = c("#0073C2FF", "#EFC000FF","red" ),
+  show_percentage = F,
+  auto_scale = F,
+  stroke_size = 0.02, set_name_size = 4
+)+ggtitle(my_title)
+print(p3)
+plot_title = gsub("\\.\\s|\\s|,", "_", my_title)
+if(save_plots){
+  ggsave(paste0("DiffMesor_DiffRhyth_vs_DiffExpr/VennDiagram_DR_DE_DM_", plot_title, ".pdf"),plot = p3)
+}
+return(DM_not_DE)
+}
+
+```
+
+Generate the VennDiagrams
+
+```{r}
+#Excitatory Neuron subtypes 3 & 5
+EN_mesor_path_3_5 =  "../Cyclops_ordering/downstream_output_Exc3_5/differential_mesor_all_genes.csv"
+
+EN_DE_path_3_5 = "../edgeR_diff_expression/Exc3_5/Exc3_5_filtByExpr_edgeR_DE_QLFTest.csv"
+
+EN_DR_path_3_5 = "../Cyclops_ordering/downstream_output_Exc3_5/diff_rhythms_CyclingBHQ1AmpRatio20.csv"
+
+#All Excitatory Neurons
+EN_mesor_path =  "../Cyclops_ordering/downstream_output_Exc_all/differential_mesor_all_genes.csv"
+
+EN_DE_path = "../edgeR_diff_expression/Exc_All/Exc_all_filtByExpr_edgeR_DE_QLFTest.csv"
+
+EN_DR_path = "../Cyclops_ordering/downstream_output_Exc_all/diff_rhythms_CyclingBHQ1AmpRatio20.csv"
+
+#All Inhibitory Neurons
+IN_mesor_path = "../Cyclops_ordering/downstream_output_Inhib_all/differential_mesor_all_genes.csv"
+
+IN_DE_path = "../edgeR_diff_expression/Inhib_All/Inhib_all_filtByExpr_edgeR_DE_QLFTest.csv"
+
+IN_DR_path = "../Cyclops_ordering/downstream_output_Inhib_all/diff_rhythms_CyclingBHQ1AmpRatio20.csv"
+
+#All Astrocytes
+AS_mesor_path = "../Cyclops_ordering/downstream_output_Ast_all/differential_mesor_all_genes.csv"
+
+AS_DE_path = "../edgeR_diff_expression/Ast_All/Ast_all_filtByExpr_edgeR_DE_QLFTest.csv"
+
+AS_DR_path = "../Cyclops_ordering/downstream_output_Ast_all/diff_rhythms_CyclingBHQ1AmpRatio20.csv"
+
+#All Microglia
+MG_mesor_path = "../Cyclops_ordering/downstream_output_Mglia_all/differential_mesor_all_genes.csv"
+
+MG_DE_path = "../edgeR_diff_expression/Mglia_All/Mglia_all_filtByExpr_edgeR_DE_QLFTest.csv"
+
+MG_DR_path = "../Cyclops_ordering/downstream_output_Mglia_all/diff_rhythms_CyclingBHQ1AmpRatio20.csv"
+
+#Function calls
+EN_not_DE_3_5 = make_venn(EN_mesor_path_3_5, EN_DE_path_3_5, EN_DR_path_3_5, "Exc. Neurons 3,5", lfc_cutoff = 0)
+EN_not_DE = make_venn(EN_mesor_path, EN_DE_path, EN_DR_path, "Exc. Neurons", lfc_cutoff = 0)
+IN_not_DE = make_venn(IN_mesor_path, IN_DE_path, IN_DR_path, "Inh. Neurons", lfc_cutoff = 0)
+AS_not_DE = make_venn(AS_mesor_path, AS_DE_path, AS_DR_path, "Astrocytes", lfc_cutoff = 0)
+MG_not_DE = make_venn(MG_mesor_path, MG_DE_path, MG_DR_path, "Microglia", lfc_cutoff = 0)
+
+
+
+```
+
+### EnrichR
+
+Call EnrichR API with python, supplying various lists from cycling and differential rhythm analysis.
+
+```{r}
+
+setwd("../Analysis_scripts/")
+path_no_space = gsub(" ", "\\ ", getwd(), fixed = TRUE)
+setwd("../Figure_scripts/DiffMesor_DiffRhyth_vs_DiffExpr/")
+
+#run system command to call python script that uses enrichR API
+run_enrichR = function(gene_lists, background_lists){
+  mapply(function(x, y){
+  system(paste0("python3 ", path_no_space, "/downstream_helpers/Python_EnrichR_for_AnalysisPipeline.py -g \"enrichR_files/" ,x, "\" -b \"enrichR_files/",y , "\""))},
+  gene_lists,
+  background_lists)
+}
+
+#Run enrichR for DM not DE 
+gene_lists_DM_not_DE = list.files("enrichR_files/", pattern = "*_DM_not_DE.csv") %>% sort
+backgrounds =  list.files("enrichR_files/", pattern = "*_background.csv") %>% sort
+run_enrichR(gene_lists_DM_not_DE, backgrounds)
+
+#Run enrichR for DE not DM
+gene_lists_DE_not_DM = list.files("enrichR_files/", pattern = "*_DE_not_DM.csv") %>% sort
+run_enrichR(gene_lists_DE_not_DM, backgrounds)
+
+#Run enrichR for DE and DM
+gene_lists_DM_AND_DE = list.files("enrichR_files/", pattern = "*_DM_AND_DE.csv") %>% sort
+run_enrichR(gene_lists_DM_AND_DE, backgrounds)
+
+#Run enrichR for DR not DE
+gene_lists_DR_not_DE = list.files("enrichR_files", pattern = "*DR_not_DE.csv") %>% sort
+run_enrichR(gene_lists_DR_not_DE, backgrounds)
+
+#Run enrichR for DE not DR
+gene_lists_DE_not_DR = list.files("enrichR_files", pattern = "*DE_not_DR.csv") %>% sort
+run_enrichR(gene_lists_DE_not_DR, backgrounds)
+
+#Run enrichR for DR and DE
+gene_lists_DR_and_DE = list.files("enrichR_files", pattern = "*DR_AND_DE.csv") %>% sort
+run_enrichR(gene_lists_DR_and_DE, backgrounds)
+
+
+```
+
+What if I use a custom gene set of AD GWAS genes and do a Fisher's exact test for my gene lists?
+
+```{r}
+GWAS_genes = c("ABCA1", "ABCA7", "ABI3", "ACE", "ADAM17", "ADAMTS1", "ANK3", "ANKH", "APH1B", "APP", "BCKDK", "BIN1", "BLNK", "CASS4", "CD2AP",
+"CLNK", "CLU", "COX7C", "CR1", "CTSB", "CTSH", "DOC2A", "EED", "EPDR1", "EPHA1", "FERMT2", "FOXF1", "GRN", "HLA-DQA1", "HS3ST5",
+"ICA1", "IDUA", "IGH", "IL34", "INPP5D", "JAZF1", "KLF16", "LILRB2", "MAF", "MINDY2", "MME", "MS4A4A", "MYO15A", "NCK2", "PLCG2",
+"PLEKHA1", "PRDM7", "PRKD3", "PTK2B", "RASGEF1C", "RBCK1", "RHOH", "SCIMP", "SEC61G", "SHARPIN", "SIGLEC11", "SLC24A4", "SLC2A4RG",
+"SNX1", "SORL1", "SORT1", "SPDYE3", "SPI1", "SPPL2A", "TMEM106B", "TNIP1", "TPCN1", "TREM2", "TREML2", "TSPAN14", "TSPOAP1",
+"UMAD1", "UNC5CL", "USP6NL", "WDR12", "WDR81", "WNT3")
+
+get_gene_lists = function(diff_mesor_file, path_to_DE, path_to_DR, mesor_signif_cutoff = 0.05, de_signif_cutoff = 0.05, DR_BHQ_cutoff = 0.3){
+    
+  Diff_mesor = read_csv(diff_mesor_file, show_col_types = F) 
+  background = dplyr::select(Diff_mesor, Gene_Symbols) %>% unname %>% unlist
+  Diff_mesor = Diff_mesor %>%  filter(BHQ < mesor_signif_cutoff)
+  
+  Diff_rhyth = read_csv(path_to_DR, show_col_types = F)
+  Diff_rhyth = dplyr::filter(Diff_rhyth, BHQ < DR_BHQ_cutoff)
+  
+  ## Differential Expression
+  qlf_test = read_csv(path_to_DE, show_col_types = F) %>% 
+    filter(FDR < de_signif_cutoff)
+  
+  DM_not_DE = setdiff(Diff_mesor$Gene_Symbols, qlf_test$...1)
+  DE_not_DM = setdiff(qlf_test$...1, Diff_mesor$Gene_Symbols)
+  DM_AND_DE = intersect(Diff_mesor$Gene_Symbols, qlf_test$...1)
+  
+  DR_not_DE = setdiff(Diff_rhyth$Gene_Symbols, qlf_test$...1)
+  DE_not_DR = setdiff(qlf_test$...1, Diff_rhyth$Gene_Symbols)
+  DR_AND_DE = intersect(Diff_rhyth$Gene_Symbols, qlf_test$...1)
+  return(list(background = background, DM_not_DE =DM_not_DE, DE_not_DM=DE_not_DM, DM_AND_DE=DM_AND_DE, DR_not_DE=DR_not_DE, DE_not_DR=DE_not_DR, DR_AND_DE=DR_AND_DE))
+}
+
+
+compute_fisher_test = function(gene_list, background){
+  stopifnot(all(gene_list %in% background))
+  GWAS = GWAS_genes[GWAS_genes %in% background]
+  stopifnot(all(GWAS %in% background))
+  
+  GWAS_and_GL = which(GWAS %in% gene_list)
+  GWAS_and_not_GL = which(!(GWAS %in% gene_list))
+  GL_not_GWAS = which(!(gene_list %in% GWAS))
+  
+  a = length(GWAS_and_GL)
+  b = length(GWAS_and_not_GL)
+  c = length(GL_not_GWAS)
+  d = length(background) - a - b -c
+  stopifnot(a+c == length(gene_list))
+  stopifnot(a+b == length(GWAS))
+  # Create a 2x2 matrix
+  table <- matrix(c(a, b, c, d), nrow = 2, byrow = TRUE)
+  colnames(table) = c("In Genelist", "Not in Genelist")
+  rownames(table) = c("GWAS", "Not in GWAS")
+  print(table)
+  # Perform Fisher's Exact Test
+  result <- fisher.test(table)
+  return(result$p.value)
+}
+
+
+EN_gene_lists = get_gene_lists(EN_mesor_path, EN_DE_path, EN_DR_path)
+EN_background = EN_gene_lists[[1]]
+for(i in EN_gene_lists[2:7]){
+    res = compute_fisher_test(i, EN_background)
+    print(res)
+}
+
+
+IN_gene_lists = get_gene_lists(IN_mesor_path, IN_DE_path, IN_DR_path)
+IN_background = IN_gene_lists[[1]]
+for(i in IN_gene_lists[2:7]){
+    res = compute_fisher_test(i, IN_background)
+    print(res)
+}
+
+AS_gene_lists = get_gene_lists(AS_mesor_path, AS_DE_path, AS_DR_path)
+AS_background = AS_gene_lists[[1]]
+for(i in AS_gene_lists[2:7]){
+  res = compute_fisher_test(i, AS_background)
+  print(res)
+}
+
+MG_gene_lists = get_gene_lists(MG_mesor_path, MG_DE_path, MG_DR_path)
+MG_background = MG_gene_lists[[1]]
+for(i in MG_gene_lists[2:7]){
+  res = compute_fisher_test(i, MG_background)
+  print(res)
+}
+```
+
+### fGSEA on ranking p-value ratios
+
+```{r}
+EN_mesor = read_csv(EN_mesor_path, show_col_types = F) %>% arrange(Gene_Symbols)
+
+EN_DE = read_csv(EN_DE_path, show_col_types = F) %>% arrange(`...1`)
+
+all(EN_DE$...1 == EN_mesor$Gene_Symbols)
+
+out_df = data.frame(Gene_Symbols = EN_DE$...1, rank = -log2(EN_mesor$p_mesor / EN_DE$PValue)) %>% arrange(desc(rank))
+
+write.table(out_df, "DiffMesor_DiffRhyth_vs_DiffExpr/fGSEA/rnk_files/Exc_all_DM_vs_DR_ranking.rnk", sep = '\t', row.names = F, col.names = F)
+```
+
+run FGSEA:
+
+```{r}
+source("../Analysis_scripts/downstream_helpers/fgsea.R")
+
+
+#Pathways, downloaded from MsigDB
+pathways <- c(gmtPathways("../Analysis_scripts/MsigDB_gmts_for_GSEA/c2.cp.kegg_legacy.v2024.1.Hs.symbols.gmt"), gmtPathways("../Analysis_scripts/MsigDB_gmts_for_GSEA/h.all.v2024.1.Hs.symbols.gmt"), gmtPathways("../Analysis_scripts/MsigDB_gmts_for_GSEA/AD_GWAS_genes.gmt"))
+
+
+gene_remapping_dict = read.delim("../Analysis_scripts/MsigDB_gmts_for_GSEA/Human_Gene_Symbol_with_Remapping_MSigDB.v2024.1.Hs.chip", sep = '\t')
+
+setwd("DiffMesor_DiffRhyth_vs_DiffExpr/fGSEA/rnk_files/")
+
+rnk_files = list.files(pattern = ".rnk")
+
+run_fgsea(rnk_files, gene_remapping_dict, pathways, min_size = 10, max_size = 500)
+```
+
+### Make Plot
+
+```{r}
+library(scales)
+
+EN_fgsea = read_csv("DiffMesor_DiffRhyth_vs_DiffExpr/fGSEA/fGSEA_results/Exc_all_DM_vs_DR_ranking.csv", show_col_types = F)
+
+plot_df = EN_fgsea %>% slice(1:10)
+plot_df$pathway = str_to_title(str_wrap(str_replace_all(plot_df$pathway, "_", " "), 15))
+# Shared scale parameters
+size_limits <- c(50, 250)  # Set the range of size values
+size_range <- c(5, 10)  # Set the range of dot sizes in the plot
+
+#Ensure y-axis comes in the right order:
+pathways = plot_df %>% arrange(desc(padj)) %>% select(pathway) %>% unname %>% unlist
+plot_df$pathway = factor(plot_df$pathway,levels = pathways)
+# Create a KO dot plot
+p= ggplot(plot_df, aes(x = NES, y = pathway, color = -log10(padj), size = size)) +
+  geom_segment(aes(x = 0, xend = NES, y = pathway, yend = pathway), 
+                linetype = "dotted", color = "gray", linewidth = 1) + # Add dotted lines
+  geom_point() +  # Adjust the size of the dots if needed
+  scale_size_continuous(range = c(5, 10),  limits = size_limits) +  # Adjust the range of point sizes (min, max)
+  scale_color_gradient(low = "#4575b4", high = "#d73027", limits = c(0, 10),  # Set the visible range
+    oob = squish ) +  # Customize the color gradient
+  #scale_x_reverse()+
+  #xlim(0,-3.0)+
+  labs(x = "NES", y = "Pathway",
+       color = "-Log10(BH.q)", title = "Exc All DM vs DE p-value ratio") +#Label axes and legend
+  theme_minimal() + # Use a clean theme
+    theme(
+    axis.text.x = element_text(size = 14, angle = 0),    # Increase x-axis text size
+    axis.text.y = element_text(size = 12, angle = 0),    # Increase y-axis text size
+    axis.title.x = element_text(size = 14),   # Increase x-axis title size
+    axis.title.y = element_text(size = 14),   # Increase y-axis title size
+    legend.title = element_text(size = 12)    # Increase legend title size
+  )
+
+ggsave(filename = "~/Desktop/DM_vs_DE_pvalRatio_dotPlot.pdf", width = 5.5, height = 5.8, units = "in")
+```

@@ -1,0 +1,46 @@
+"",matched_features
+Glycolysis or Gluconeogenesis,hsa:3939; hsa:5223; hsa:669; hsa:2597; hsa:7167; hsa:226; hsa:5213; hsa:5230
+Fructose and mannose metabolism,hsa:4351; hsa:5372; hsa:5213; hsa:7167; hsa:226; hsa:26007
+Purine metabolism,hsa:4830; hsa:4831; hsa:115024; hsa:353; hsa:131870; hsa:51292; hsa:3615; hsa:2987; hsa:374659
+Drug metabolism - other enzymes,hsa:3615; hsa:4830; hsa:4831; hsa:2950; hsa:9446
+Glutathione metabolism,hsa:2879; hsa:2950; hsa:9446; hsa:4953
+Terpenoid backbone biosynthesis,hsa:3157; hsa:3422; hsa:10654
+Citrate cycle (TCA cycle),hsa:3420; hsa:47; hsa:4191
+Cysteine and methionine metabolism,hsa:191; hsa:2805; hsa:3939; hsa:4191
+Phenylalanine metabolism,hsa:2805; hsa:4282
+Butanoate metabolism,hsa:3157; hsa:2572
+Pyrimidine metabolism,hsa:4830; hsa:4831; hsa:115024; hsa:79077
+Synthesis and degradation of ketone bodies,hsa:3157
+Arginine and proline metabolism,hsa:55748; hsa:2805; hsa:4953
+"Phenylalanine, tyrosine and tryptophan biosynthesis",hsa:2805
+beta-Alanine metabolism,hsa:2572; hsa:55748
+Pyruvate metabolism,hsa:4191; hsa:3939
+Pentose phosphate pathway,hsa:226; hsa:5213
+Lipoic acid metabolism,hsa:387787
+Taurine and hypotaurine metabolism,hsa:2572
+"Alanine, aspartate and glutamate metabolism",hsa:2805; hsa:2572
+"Glycine, serine and threonine metabolism",hsa:5223; hsa:669
+Inositol phosphate metabolism,hsa:7167; hsa:10423
+Arginine biosynthesis,hsa:2805
+Phosphatidylinositol signaling system,hsa:10423; hsa:90809
+N-Glycan biosynthesis,hsa:54344; hsa:8818
+Glycosylphosphatidylinositol (GPI)-anchor biosynthesis,hsa:8818
+Amino sugar and nucleotide sugar metabolism,hsa:4351; hsa:5372
+Histidine metabolism,hsa:55748
+Pentose and glucuronate interconversions,hsa:51181
+Selenocompound metabolism,hsa:22928
+Glycerolipid metabolism,hsa:26007
+Tyrosine metabolism,hsa:2805; hsa:4282
+Nicotinate and nicotinamide metabolism,hsa:115024
+Drug metabolism - cytochrome P450,hsa:2950; hsa:9446
+Propanoate metabolism,hsa:3939
+Galactose metabolism,hsa:5213
+Porphyrin and chlorophyll metabolism,hsa:3052
+Glyoxylate and dicarboxylate metabolism,hsa:4191
+Sphingolipid metabolism,cpd:C00550
+Folate biosynthesis,hsa:5092
+Fatty acid elongation,hsa:5538
+Metabolism of xenobiotics by cytochrome P450,hsa:9446; hsa:2950
+Steroid biosynthesis,hsa:6307
+Glycerophospholipid metabolism,hsa:10423
+"Valine, leucine and isoleucine degradation",hsa:3157

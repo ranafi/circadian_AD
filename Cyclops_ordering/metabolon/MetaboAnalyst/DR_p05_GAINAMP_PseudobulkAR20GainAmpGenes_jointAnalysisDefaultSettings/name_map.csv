@@ -1,0 +1,6 @@
+"Query","Match","HMDB","PubChem","KEGG","SMILES","Comment"
+"LysoPE(P-18:0/0:0)","NA","NA","NA","NA","NA","0"
+"1-Carboxyethylphenylalanine","NA","NA","NA","NA","NA","0"
+"Methylhistidine","Methylhistidine","HMDB0000479","64969","C01152","[H][C@](N)(CC1=CN=CN1C)C(O)=O","1"
+"Lignoceroylcarnitine","NA","NA","NA","NA","NA","0"
+"D-Mannonate","D-Mannonate","METPA0052",NA,"C00514",NA,"1"

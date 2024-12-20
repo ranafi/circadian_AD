@@ -1,0 +1,8 @@
+Rank,Term name,P-value,Z-score,Combined score,Overlapping genes,Adjusted p-value,Old p-value,Old adjusted p-value,gene count
+1,Renal cell carcinoma,0.013698509895775864,inf,inf,['ETS1'],0.03196318975681035,0,0,1
+2,Taste transduction,0.013698509895775864,inf,inf,['SCNN1G'],0.03196318975681035,0,0,1
+3,Aldosterone-regulated sodium reabsorption,0.013698509895775864,inf,inf,['SCNN1G'],0.03196318975681035,0,0,1
+4,Cellular senescence,0.05385961311007478,28.6,83.55130712145284,['ETS1'],0.07809651281808026,0,0,1
+5,Human T-cell leukemia virus 1 infection,0.06693986812978307,21.4,57.8647558379931,['ETS1'],0.07809651281808026,0,0,1
+6,Ras signaling pathway,0.06693986812978307,21.4,57.8647558379931,['ETS1'],0.07809651281808026,0,0,1
+7,Pathways in cancer,0.1301033694244691,9.4,19.170604353670967,['ETS1'],0.1301033694244691,0,0,1

@@ -1,0 +1,475 @@
+---
+title: "JTK_num_cyclers_vs_signif_cutoff"
+format: html
+editor: visual
+---
+
+This file is for generating the plot in figure 1 with the #cyclers vs signif cutoff
+
+```{r}
+require(tidyverse)
+require(gridExtra)
+
+```
+
+### Mouse \# genes vs BHQ
+
+```{r}
+setwd("Core_clock_face_python_plots/")
+linewidth = 1
+
+
+get_num_genes_helper = function(df, amp_ratio_cutoff = 0.){
+  df = filter(df, ampRatio >= amp_ratio_cutoff)
+  df = df[order(df$BH.Q),]
+  df$num_genes_w_ties = seq_along(df$BH.Q) #Create a cumulative count column
+  df = df %>% mutate(log10BHQ = -log10(BH.Q))
+  results = dplyr::select(df, CycID, log10BHQ, num_genes_w_ties) 
+  # rm_above = which(results$log10BHQ == 0) %>% head(1) #last gene w p == 1
+  # results = results[-((rm_above+1):nrow(results)), ]
+  results = results %>% group_by(log10BHQ) %>% mutate(num_genes = max(num_genes_w_ties))
+  return(results)
+}
+get_num_genes = function(filename){
+  file = read_csv(filename, show_col_types = F)
+  file$mean = rowMeans(file[,-c(1:6)])
+  file$ampRatio = file$AMP/file$mean
+  results = get_num_genes_helper(file, amp_ratio_cutoff = 0.)
+  
+}
+
+#Get cumulative number of genes as a function of -log10(BHQ)
+WT_bulk = get_num_genes("JTKresult_bulk_WT_data.csv")
+WT_astro = get_num_genes("JTKresult_astro_wt_data.csv")
+WT_mglia = get_num_genes("JTKresult_micro_WT_data.csv")
+
+APP_bulk = get_num_genes("JTKresult_bulk_APP_data.csv")
+APP_astro = get_num_genes("JTKresult_astro_APP_data.csv")
+APP_mglia = get_num_genes("JTKresult_micro_APP_data.csv")
+
+#Get unique genes as a function of -log10(BHQ)
+get_unique_genes = function(bulk_df, mglia_df, astro_df, cutoff_seq = seq(0, 10, by = 0.01)){
+    # Helper function to filter genes based on cutoff
+  filter_genes <- function(tibble, cutoff) {
+    tibble %>% filter(`log10BHQ` >= cutoff) %>% pull(CycID)
+  }
+   
+  # Initialize results
+  results <- data.frame(
+    cutoff = cutoff_seq,
+    unique_bulk = numeric(length(cutoff_seq)),
+    unique_mglia = numeric(length(cutoff_seq)),
+    unique_astro = numeric(length(cutoff_seq))
+  )
+  
+  # Loop through each cutoff value
+  for (i in seq_along(cutoff_seq)) {
+    cutoff <- cutoff_seq[i]
+    
+    # Filter genes for each cell type
+    bulk_genes <- filter_genes(bulk_df, cutoff)
+    mglia_genes <- filter_genes(mglia_df, cutoff)
+    astro_genes <- filter_genes(astro_df, cutoff)
+    
+    # Compute unique genes
+    results$unique_bulk[i] <- length(setdiff(bulk_genes, bulk_genes))
+    results$unique_mglia[i] <- length(setdiff(mglia_genes, bulk_genes))
+    results$unique_astro[i] <- length(setdiff(astro_genes, bulk_genes))
+  }
+    return(results)
+
+}
+unique_df_ctl = get_unique_genes(WT_bulk, WT_mglia, WT_astro)
+unique_df_app = get_unique_genes(APP_bulk, APP_mglia, APP_astro)
+
+#Ctl plot
+p1= ggplot() +
+  geom_line(data = WT_bulk, aes(x = log10BHQ, y=num_genes, color="Bulk"),
+            linewidth = linewidth) +
+  # geom_line(data = unique_df_ctl, aes(x=cutoff, y=unique_bulk, 
+  #           color = "Bulk"), linetype = "dotted", linewidth = 1)+
+  geom_line(data = WT_mglia, aes(x = log10BHQ, y = num_genes,
+            color = "Mic."), linewidth = linewidth) +
+  geom_line(data = unique_df_ctl, aes(x = cutoff, y = unique_mglia,                 color = "Mic."), linetype = "dotted", linewidth = linewidth)+
+  geom_line(data = WT_astro, aes(x = log10BHQ, y = num_genes,
+            color = "Ast."), linewidth = linewidth) +
+  geom_line(data = unique_df_ctl, aes(x = cutoff, y = unique_astro, 
+            color = "Ast."), linetype = "dotted",linewidth = linewidth)+
+  labs(x = "-Log10(JTK BH.q)", y = "Number of Cycling Transcripts") +
+  scale_color_manual(name = "Cell Type",
+            values = c("Bulk" = "#6a9f58", "Mic." = "#d1615d",
+            "Ast." = "#5778a4"),
+          breaks = c("Bulk", "Ast.", "Mic.")) +
+  theme_minimal()+
+  ylim(c(0, 10000))+
+  xlim(c(0, 3))+
+  theme(
+      plot.title = element_text(size = 20),      # Title font size
+      axis.title = element_text(size = 14),     # Axis title font size
+      axis.text = element_text(size = 14),      # Axis text font size
+      legend.text = element_text(size = 12),    # Legend text font size
+      legend.title = element_text(size = 14)    # Legend title font size
+)
+
+#APP plot
+p2= ggplot() +
+  geom_line(data = APP_bulk, aes(x = log10BHQ,  y = num_genes,
+          color = "Bulk"), linewidth = linewidth) +
+  # geom_line(data = unique_df_app, aes(x = cutoff, y = unique_bulk,
+          # color = "Bulk"), linetype = "dotted", linewidth = 1)+
+  geom_line(data = APP_mglia,  aes(x = log10BHQ, y = num_genes,
+          color = "Mic."), linewidth = linewidth) +
+  geom_line(data = unique_df_app, aes(x = cutoff, y = unique_mglia,
+          color = "Mic."), linetype = "dotted", linewidth = linewidth)+
+  geom_line(data = APP_astro, aes(x = log10BHQ, y = num_genes,
+          color = "Ast."), linewidth = linewidth) +
+  geom_line(data = unique_df_app, aes(x = cutoff, y = unique_astro,
+          color = "Ast."), linetype = "dotted", linewidth = linewidth)+
+  labs(x = "-Log10(JTK BH.q)", y = "Number of Cycling Transcripts") +
+  scale_color_manual(name = "Cell Type",
+          values = c("Bulk" = "#6a9f58", "Mic." = "#d1615d",
+          "Ast." = "#5778a4"),
+          breaks = c("Bulk", "Ast.", "Mic.")) +
+  theme_minimal()+
+  ylim(c(0, 10000))+
+  xlim(c(0, 3))+
+  theme(
+        plot.title = element_text(size = 20),      # Title font size
+        axis.title = element_text(size = 14),     # Axis title font size
+        axis.text = element_text(size = 14),      # Axis text font size
+        legend.text = element_text(size = 12),    # Legend text font size
+        legend.title = element_text(size = 14)    # Legend title font size
+)
+
+
+out = grid.arrange(p1, p2, nrow = 1)
+```
+
+### Save PDF
+
+```{r}
+ggsave("~/Desktop/Mouse_JTK_Cyclers_vs_BHQcutoff.pdf", plot = out, width = 8, height = 5, units = "in")
+```
+
+Sanity checks
+
+```{r}
+x = 0.0
+tmp_mglia = filter(WT_mglia, log10BHQ >= x)
+tmp_astro = filter(WT_astro, log10BHQ >= x)
+tmp_bulk = filter(WT_bulk, log10BHQ >= x)
+setdiff(tmp_mglia$CycID, tmp_bulk$CycID) %>% length
+setdiff(tmp_astro$CycID, tmp_bulk$CycID) %>% length
+
+tmp_mglia = filter(APP_mglia, log10BHQ >= x)
+tmp_astro = filter(APP_astro, log10BHQ >= x)
+tmp_bulk = filter(APP_bulk, log10BHQ >= x)
+setdiff(tmp_mglia$CycID, tmp_bulk$CycID) %>% length
+setdiff(tmp_astro$CycID, tmp_bulk$CycID) %>% length
+```
+
+### human results \# genes vs BHQ:
+
+```{r}
+
+get_num_genes_helper_BHQ_human = function(df, amp_ratio_cutoff = 0.){
+  n_genes = nrow(df) #Total number of genes in cell type
+  df = filter(df, amp_ratio >= amp_ratio_cutoff)
+  df = df[order(df$BHQ),]
+  df$num_genes_w_ties = seq_along(df$BHQ) #Create a cumulative count column
+  df = df %>% mutate(log10BHQ = -log10(BHQ))
+  results = dplyr::select(df, log10BHQ, num_genes_w_ties)
+  rm_above = which(results$log10BHQ == 0) %>% head(1) #last gene w p == 1
+  if(length(rm_above) != 0 ){
+      print("Removing duplicate BHQ == 0 genes")
+      results = results[-((rm_above+1):nrow(results)), ]
+  }else{#If no genes have -log10(BHQ) == 0 add one to make plot nice
+      print("There were no BHQ == 0 genes, adding dummy value for BHQ ==0 so that lines intersect y-axis")
+      last_row = results[nrow(results), ]  # Extract the last row
+      # Append the last row to the tibble
+      results_w_dummy = bind_rows(results, last_row)  
+      last_idx = nrow(results_w_dummy)
+      stopifnot(all(results_w_dummy[-last_idx,] == results))
+      results_w_dummy$log10BHQ[last_idx] = 0
+      results_w_dummy$num_genes_w_ties[last_idx] = nrow(results)
+      results = results_w_dummy
+  }
+  results = results %>% group_by(log10BHQ) %>% mutate(num_genes = max(num_genes_w_ties))
+  results$frac_genes = results$num_genes / n_genes
+
+  return(results)
+}
+get_num_genes_human = function(filename){
+  file = read_csv(filename, show_col_types = F)
+  results = get_num_genes_helper_BHQ_human(file, amp_ratio_cutoff = 0.2)
+}
+
+CTL_pseudo_all = get_num_genes_human("../Cyclops_ordering/downstream_output_Pseudobulk_all/cosinor_results_CTL.csv" )
+CTL_exc_all = get_num_genes_human("../Cyclops_ordering/downstream_output_Exc_all/cosinor_results_CTL.csv" )
+CTL_inh_all = get_num_genes_human("../Cyclops_ordering/downstream_output_Inhib_all/cosinor_results_CTL.csv")
+CTL_mglia_all = get_num_genes_human("../Cyclops_ordering/downstream_output_Mglia_all/cosinor_results_CTL.csv")
+CTL_ast_all = get_num_genes_human("../Cyclops_ordering/downstream_output_Ast_all/cosinor_results_CTL.csv")
+
+linewidth = 2
+linetype = "dotted"
+
+p3= ggplot() +
+  geom_line(data = CTL_pseudo_all, aes(x = log10BHQ, y = num_genes,
+            color = "Bulk"), linewidth = linewidth) +
+  geom_line(data = CTL_exc_all, aes(x = log10BHQ,
+            y = num_genes, color = "Exc."), linewidth = linewidth) +
+  geom_line(data = CTL_inh_all, aes(x = log10BHQ,
+            y = num_genes, color = "Inh."), linewidth = linewidth) +
+  geom_line(data = CTL_mglia_all, aes(x = log10BHQ, y = num_genes,
+            color = "Mic."), linewidth = linewidth) +
+  geom_line(data = CTL_ast_all, aes(x = log10BHQ, y = num_genes, 
+            color = "Ast."), linewidth = linewidth) +
+  geom_vline(xintercept = 1, linetype = linetype, color = "grey",
+            linewidth = linewidth) +
+  labs(x = "-Log10(Cycling BH.Q)", y = "Number of Cycling Transcripts") +
+  #Colors from tableau 10 palette to match python figs
+  scale_color_manual(name = "Cell Type",
+        values = c("Bulk" = "#a87c9f","Exc." = "#6a9f58",
+        "Inh." = "#e49444", "Mic." = "#d1615d",
+        "Ast." = "#5778a4"),
+            breaks = c("Bulk", "Exc.", "Inh.", "Ast.", "Mic.")) +
+  theme_minimal()+
+  ylim(c(0, 6000))+
+  xlim(c(0, 10))+
+  theme(
+      plot.title = element_text(size = 20),      # Title font size
+      axis.title = element_text(size = 14),     # Axis title font size
+      axis.text = element_text(size = 14),      # Axis text font size
+      legend.text = element_text(size = 12),    # Legend text font size
+      legend.title = element_text(size = 14)    # Legend title font size
+)
+
+
+AD_pseudo_all = get_num_genes_human("../Cyclops_ordering/downstream_output_Pseudobulk_all/cosinor_results_AD.csv" )
+AD_exc_all = get_num_genes_human("../Cyclops_ordering/downstream_output_Exc_all/cosinor_results_AD.csv" )
+AD_inh_all = get_num_genes_human("../Cyclops_ordering/downstream_output_Inhib_all/cosinor_results_AD.csv")
+AD_mglia_all = get_num_genes_human("../Cyclops_ordering/downstream_output_Mglia_all/cosinor_results_AD.csv")
+AD_ast_all = get_num_genes_human("../Cyclops_ordering/downstream_output_Ast_all/cosinor_results_AD.csv")
+
+p4= ggplot() +
+  geom_line(data = AD_pseudo_all, aes(x = log10BHQ,
+            y = num_genes, color = "Bulk"), linewidth = linewidth) +
+  geom_line(data = AD_exc_all, aes(x = log10BHQ,
+            y = num_genes, color = "Exc."), linewidth = linewidth) +
+  geom_line(data = AD_inh_all, aes(x = log10BHQ, y = num_genes,
+            color = "Inh."), linewidth = linewidth) +
+  geom_line(data = AD_mglia_all, aes(x = log10BHQ,
+            y = num_genes, color = "Mic."), linewidth = linewidth) +
+  geom_line(data = AD_ast_all, aes(x = log10BHQ,
+            y = num_genes, color = "Ast."), linewidth = linewidth) +
+  geom_vline(xintercept = 1, linetype = linetype, color = "grey",
+             linewidth = linewidth) +
+  labs(x = "-Log10(Cycling BH.Q)", y = "Number of Cycling Transcripts") +
+  #Colors from tableau 10 palette to match python figs
+  scale_color_manual(name = "Cell Type",
+          values = c("Bulk" = "#a87c9f","Exc." = "#6a9f58",
+          "Inh." = "#e49444", "Mic." = "#d1615d",
+          "Ast." = "#5778a4"),
+            breaks = c("Bulk", "Exc.", "Inh.", "Ast.", "Mic.")) +
+  theme_minimal()+
+  ylim(c(0, 6000))+
+  xlim(c(0, 10))+
+  theme(
+      plot.title = element_text(size = 20),      # Title font size
+      axis.title = element_text(size = 14),     # Axis title font size
+      axis.text = element_text(size = 14),      # Axis text font size
+      legend.text = element_text(size = 12),    # Legend text font size
+      legend.title = element_text(size = 14)    # Legend title font size
+)
+
+#Plot the fraction instead of number
+p5= ggplot() +
+  geom_line(data = CTL_pseudo_all, aes(x = log10BHQ,
+            y = frac_genes, color = "Bulk"), linewidth = linewidth) +
+  geom_line(data = CTL_exc_all, aes(x = log10BHQ,
+            y = frac_genes, color = "Exc."), linewidth = linewidth) +
+  geom_line(data = CTL_inh_all, aes(x = log10BHQ,
+            y = frac_genes, color = "Inh."), linewidth = linewidth) +
+  geom_line(data = CTL_mglia_all, aes(x = log10BHQ,
+            y = frac_genes, color = "Mic."), linewidth = linewidth) +
+  geom_line(data = CTL_ast_all, aes(x = log10BHQ, y = frac_genes,
+            color = "Ast."), linewidth = linewidth) +
+  geom_vline(xintercept = 1, linetype = linetype, color = "grey",
+             linewidth = linewidth) +
+  labs(x = "-Log10(Cycling BH.Q)", y = "Fraction of Transcripts Cycling") +
+  #Colors from tableau 10 palette to match python figs
+  scale_color_manual(name = "Cell Type",
+            values = c("Bulk" = "#a87c9f","Exc." = "#6a9f58",
+            "Inh." = "#e49444", "Mic." = "#d1615d",
+            "Ast." = "#5778a4"),
+            breaks = c("Bulk", "Exc.", "Inh.", "Ast.", "Mic.")) +
+  theme_minimal()+
+  ylim(c(0, .3))+
+  xlim(c(0, 10))+
+  theme(
+    plot.title = element_text(size = 20),      # Title font size
+    axis.title = element_text(size = 14),     # Axis title font size
+    axis.text = element_text(size = 14),      # Axis text font size
+    legend.text = element_text(size = 12),    # Legend text font size
+    legend.title = element_text(size = 14)    # Legend title font size
+)
+
+p6= ggplot() +
+  geom_line(data = AD_pseudo_all, aes(x = log10BHQ,
+            y = frac_genes, color = "Bulk"), linewidth = linewidth) +
+  geom_line(data = AD_exc_all, aes(x = log10BHQ,
+            y = frac_genes, color = "Exc."), linewidth = linewidth) +
+  geom_line(data = AD_inh_all, aes(x = log10BHQ,
+            y = frac_genes, color = "Inh."), linewidth = linewidth) +
+  geom_line(data = AD_mglia_all, aes(x = log10BHQ,
+            y = frac_genes, color = "Mic."), linewidth = linewidth) +
+  geom_line(data = AD_ast_all, aes(x = log10BHQ, y = frac_genes,
+            color = "Ast."), linewidth = linewidth) +
+  geom_vline(xintercept = 1, linetype = linetype, color = "grey",
+             linewidth = linewidth) +
+  labs(x = "-Log10(Cycling BH.Q)", y = "Fraction of Transcripts Cycling") +
+  #Colors from tableau 10 palette to match python figs
+  scale_color_manual(name = "Cell Type",
+            values = c("Bulk" = "#a87c9f","Exc." = "#6a9f58",
+            "Inh." = "#e49444", "Mic." = "#d1615d",
+            "Ast." = "#5778a4"),
+            breaks = c("Bulk", "Exc.", "Inh.", "Ast.", "Mic.")) +
+  theme_minimal()+
+  ylim(c(0, .3))+
+  xlim(c(0, 10))+
+  theme(
+    plot.title = element_text(size = 20),      # Title font size
+    axis.title = element_text(size = 14),     # Axis title font size
+    axis.text = element_text(size = 14),      # Axis text font size
+    legend.text = element_text(size = 12),    # Legend text font size
+    legend.title = element_text(size = 14)    # Legend title font size
+)
+
+```
+
+### save pdf
+
+```{r}
+ggsave("~/Desktop/Human_CTL_NumCyclers_vs_BHQcutoff.pdf", plot = p3, width = 5, height = 4, units = "in")
+ggsave("~/Desktop/Human_AD_NumCyclers_vs_BHQcutoff.pdf", plot = p4, width = 5, height = 4, units = "in")
+ggsave("~/Desktop/Human_CTL_FractionCyclers_vs_BHQcutoff.pdf", plot = p5, width = 5, height = 4, units = "in")
+ggsave("~/Desktop/Human_AD_FractionCyclers_vs_BHQcutoff.pdf", plot = p6, width = 5, height = 4, units = "in")
+```
+
+### Amplitude ratio version:
+
+```{r}
+linewidth = 2
+linetype = "dotted"
+get_num_genes_helper_AR_human = function(df, BHQ_cutoff = 0.1){
+  df = filter(df, BHQ < BHQ_cutoff)
+  df = df[order(df$amp_ratio, decreasing = T),]
+  df$num_genes_w_ties = seq_along(df$amp_ratio)  # Create a cumulative count column
+  results = dplyr::select(df, amp_ratio, num_genes_w_ties)
+  rm_above = which(results$amp_ratio == 0) %>% head(1) #last gene w p == 1
+  if(length(rm_above) != 0 ){
+      print("Removing duplicate AR == 0 genes")
+      results = results[-((rm_above+1):nrow(results)), ]
+  }else{#If no genes have ampRatio == 0 add one to make plot nice
+        print("There were no AR == 0 genes, adding dummy value for AR ==0 so that lines intersect y-axis")
+
+      last_row = results[nrow(results), ]  # Extract the last row
+      # Append the last row to the tibble
+      results_w_dummy = bind_rows(results, last_row)
+      last_idx = nrow(results_w_dummy)
+      stopifnot(all(results_w_dummy[-last_idx,] == results))
+      results_w_dummy$amp_ratio[last_idx] = 0
+      results_w_dummy$num_genes_w_ties[last_idx] = nrow(results)
+      results = results_w_dummy
+  }
+  results = results %>% group_by(amp_ratio) %>% mutate(num_genes = max(num_genes_w_ties))
+  
+  return(results)
+}
+get_num_genes_human_AR = function(filename){
+  file = read_csv(filename, show_col_types = F)
+  results = get_num_genes_helper_AR_human(file, BHQ_cutoff = 0.1)
+  
+}
+CTL_pseudo_all = get_num_genes_human_AR("../Cyclops_ordering/downstream_output_Pseudobulk_all/cosinor_results_CTL.csv" )
+CTL_exc_all = get_num_genes_human_AR("../Cyclops_ordering/downstream_output_Exc_all/cosinor_results_CTL.csv" )
+CTL_inh_all = get_num_genes_human_AR("../Cyclops_ordering/downstream_output_Inhib_all/cosinor_results_CTL.csv")
+CTL_mglia_all = get_num_genes_human_AR("../Cyclops_ordering/downstream_output_Mglia_all/cosinor_results_CTL.csv")
+CTL_ast_all = get_num_genes_human_AR("../Cyclops_ordering/downstream_output_Ast_all/cosinor_results_CTL.csv")
+
+p7= ggplot() +
+  geom_line(data = CTL_pseudo_all, aes(x = amp_ratio,
+            y = num_genes, color = "Bulk"), linewidth = linewidth) +
+  geom_line(data = CTL_exc_all, aes(x = amp_ratio,
+            y = num_genes, color = "Exc."), linewidth = linewidth) +
+  geom_line(data = CTL_inh_all, aes(x = amp_ratio,
+            y = num_genes, color = "Inh."), linewidth = linewidth) +
+  geom_line(data = CTL_mglia_all, aes(x = amp_ratio,
+            y = num_genes, color = "Mic."), linewidth = linewidth) +
+  geom_line(data = CTL_ast_all, aes(x = amp_ratio, y = num_genes,
+            color = "Ast."), linewidth = linewidth) +
+  geom_vline(xintercept = .2, linetype = linetype, color = "grey",
+             linewidth = linewidth) +
+  labs(x = "Amplitude Ratio", y = "Number of Cycling Transcripts") +
+  #Colors from tableau 10 palette to match python figs
+  scale_color_manual(name = "Cell Type",
+            values = c("Bulk" = "#a87c9f","Exc." = "#6a9f58",
+            "Inh." = "#e49444", "Mic." = "#d1615d",
+            "Ast." = "#5778a4"),
+            breaks = c("Bulk", "Exc.", "Inh.", "Ast.", "Mic.")) +
+  theme_minimal()+
+  ylim(c(0, 17000))+
+  xlim(c(0, .5))+
+  theme(
+    plot.title = element_text(size = 20),      # Title font size
+    axis.title = element_text(size = 14),     # Axis title font size
+    axis.text = element_text(size = 14),      # Axis text font size
+    legend.text = element_text(size = 12),    # Legend text font size
+    legend.title = element_text(size = 14)    # Legend title font size
+)
+
+AD_pseudo_all = get_num_genes_human_AR("../Cyclops_ordering/downstream_output_Pseudobulk_all/cosinor_results_AD.csv" )
+AD_exc_all = get_num_genes_human_AR("../Cyclops_ordering/downstream_output_Exc_all/cosinor_results_AD.csv" )
+AD_inh_all = get_num_genes_human_AR("../Cyclops_ordering/downstream_output_Inhib_all/cosinor_results_AD.csv")
+AD_mglia_all = get_num_genes_human_AR("../Cyclops_ordering/downstream_output_Mglia_all/cosinor_results_AD.csv")
+AD_ast_all = get_num_genes_human_AR("../Cyclops_ordering/downstream_output_Ast_all/cosinor_results_AD.csv")
+
+p8= ggplot() +
+  geom_line(data = AD_pseudo_all, aes(x = amp_ratio,
+            y = num_genes, color = "Bulk"), linewidth = linewidth) +
+  geom_line(data = AD_exc_all, aes(x = amp_ratio,
+            y = num_genes, color = "Exc."), linewidth = linewidth) +
+  geom_line(data = AD_inh_all, aes(x = amp_ratio,
+            y = num_genes, color = "Inh."), linewidth = linewidth) +
+  geom_line(data = AD_mglia_all, aes(x = amp_ratio,
+            y = num_genes, color = "Mic."), linewidth = linewidth) +
+  geom_line(data = AD_ast_all, aes(x = amp_ratio, y = num_genes,
+            color = "Ast."), linewidth = linewidth) +
+  geom_vline(xintercept = .2, linetype = linetype, color = "grey",
+             linewidth = linewidth) +
+  labs(x = "Amplitude Ratio", y = "Number of Cycling Transcripts") +
+  #Colors from tableau 10 palette to match python figs
+  scale_color_manual(name = "Cell Type",
+            values = c("Bulk" = "#a87c9f","Exc." = "#6a9f58",
+            "Inh." = "#e49444", "Mic." = "#d1615d",
+            "Ast." = "#5778a4"),
+            breaks = c("Bulk", "Exc.", "Inh.", "Ast.", "Mic.")) +
+  
+  theme_minimal()+
+  ylim(c(0, 17000))+
+  xlim(c(0, .5))+
+  theme(
+    plot.title = element_text(size = 20),      # Title font size
+    axis.title = element_text(size = 14),     # Axis title font size
+    axis.text = element_text(size = 14),      # Axis text font size
+    legend.text = element_text(size = 12),    # Legend text font size
+    legend.title = element_text(size = 14)    # Legend title font size
+)
+```
+
+Save PDF:
+
+```{r}
+ggsave("~/Desktop/Human_CTL_NumCyclers_vs_ARcutoff.pdf", plot = p7, width = 5, height = 4, units = "in")
+ggsave("~/Desktop/Human_AD_NumCyclers_vs_ARcutoff.pdf", plot = p8, width = 5, height = 4, units = "in")
+```

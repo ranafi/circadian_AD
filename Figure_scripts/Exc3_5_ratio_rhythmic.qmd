@@ -1,0 +1,79 @@
+---
+title: "3 5 Ratio"
+format: html
+editor: visual
+---
+
+## Read in Exc 3 and 5 by individual
+
+```{r}
+library(readxl)
+```
+
+### Read in cell count sheet
+
+```{r}
+cell_cts = read_excel("../Exc35_cell_counts_per_subject.xlsx")
+```
+
+### Sort out Duplicates
+
+```{r}
+#Some subjects have multiple sequencing batches, I keep the one with more counts, see select_best_scROSMAPsubclusters.qmd
+rm_dup = c("R2144127-B52", "R2880377-B40", "R4817881-B53", "R4996203-B51", "R5447358-B36", "R5693901-B4",  "R6280004-B50", "R6679530-B52",
+"R7702934-B59", "R8724814-B46", "R8760165-B48", "R8781115-B43")
+
+cell_cts = filter(cell_cts, !(IndividualID %in% rm_dup))
+```
+
+### We need Project ID not IndividualID, so read in metadatafile
+
+```{r}
+meta = read_csv("../ROSMAP_metadata/cleaned_rosmapmeta_n409.csv", show_col_types = F)
+
+all(meta$individualID_new %in% cell_cts$IndividualID)
+
+cell_cts = merge(cell_cts, meta, by.x = "IndividualID", by.y = "individualID_new")
+
+stopifnot(all(cell_cts$IndividualID== meta$individualID_new))
+
+
+```
+
+### Read in Cyclops fit file with phase predictions
+
+```{r}
+cyc_pred = read_csv("../Cyclops_ordering/Fits/Fit_Output_2024-11-25T13_12_00.csv", show_col_types = F)
+
+stopifnot(all(cyc_pred$ID %in% cell_cts$projid))
+stopifnot(all(cell_cts$projid %in% cyc_pred$ID))
+
+plot_df = merge(cell_cts, cyc_pred, by.x = "projid", by.y = "ID")
+```
+
+### Plot
+
+```{r}
+plot_df = plot_df %>% mutate(logRatio35 = log(Exc.3/Exc.5))
+
+p1 = ggplot(plot_df)+
+  geom_point(aes(x = Phase, y = logRatio35), size = 2, alpha =0.6, color = "blue")+
+  theme_minimal()+
+  xlab("CYCLOPS Predicted Phase")+
+  ylab("Log(#Exc.3 / #Exc.5)")+
+   theme(
+      plot.title = element_text(size = 20),      # Title font size
+      axis.title = element_text(size = 14),     # Axis title font size
+      axis.text = element_text(size = 14),      # Axis text font size
+      legend.text = element_text(size = 12),    # Legend text font size
+      legend.title = element_text(size = 14)    # Legend title font size
+)
+
+print(p1)  
+```
+
+### Save pdf
+
+```{r}
+ggsave("~/Desktop/Exc3_5_ratio_rhythmic.pdf", plot = p1, width = 5, height = 4, units = "in")
+```

@@ -1,0 +1,3 @@
+Rank,Term name,P-value,Z-score,Combined score,Overlapping genes,Adjusted p-value,Old p-value,Old adjusted p-value,gene count
+1,RUNX3 human,0.016772132952811748,71.55555555555556,292.5217245085786,['ING1'],0.033544265905623497,0,0,1
+2,TP53 human,0.0865648097840069,12.402116402116402,30.346266097888666,['ING1'],0.0865648097840069,0,0,1

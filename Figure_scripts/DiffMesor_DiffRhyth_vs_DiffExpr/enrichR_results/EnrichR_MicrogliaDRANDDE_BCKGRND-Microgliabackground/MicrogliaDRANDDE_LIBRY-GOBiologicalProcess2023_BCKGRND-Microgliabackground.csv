@@ -1,0 +1,5 @@
+Rank,Term name,P-value,Z-score,Combined score,Overlapping genes,Adjusted p-value,Old p-value,Old adjusted p-value,gene count
+1,Regulation Of Hydrolase Activity (GO:0051336),0.005234985055498495,inf,inf,['ARHGAP9'],0.01758959324010332,0,0,1
+2,Regulation Of Small GTPase Mediated Signal Transduction (GO:0051056),0.00879479662005166,inf,inf,['ARHGAP9'],0.01758959324010332,0,0,1
+3,Regulation Of GTPase Activity (GO:0043087),0.014343924525103038,inf,inf,['ARHGAP9'],0.019125232700137385,0,0,1
+4,Regulation Of Intracellular Signal Transduction (GO:1902531),0.021149467881392634,inf,inf,['ARHGAP9'],0.021149467881392634,0,0,1

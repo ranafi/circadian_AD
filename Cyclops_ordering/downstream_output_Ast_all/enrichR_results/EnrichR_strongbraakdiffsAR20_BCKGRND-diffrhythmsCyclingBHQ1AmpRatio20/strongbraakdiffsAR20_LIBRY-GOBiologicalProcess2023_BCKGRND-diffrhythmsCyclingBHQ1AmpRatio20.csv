@@ -1,0 +1,20 @@
+Rank,Term name,P-value,Z-score,Combined score,Overlapping genes,Adjusted p-value,Old p-value,Old adjusted p-value,gene count
+1,Regulation Of Enamel Mineralization (GO:0070173),0.000726726087002408,inf,inf,['SLC4A2'],0.0030684129895004954,0,0,1
+2,Positive Regulation Of Tooth Mineralization (GO:0070172),0.000726726087002408,inf,inf,['SLC4A2'],0.0030684129895004954,0,0,1
+3,Negative Regulation Of Alpha-Beta T Cell Differentiation (GO:0046639),0.0014534587845002347,inf,inf,['SLC4A2'],0.0030684129895004954,0,0,1
+4,"Regulation Of CD8-positive, Alpha-Beta T Cell Differentiation (GO:0043376)",0.0014534587845002347,inf,inf,['SLC4A2'],0.0030684129895004954,0,0,1
+5,Negative Regulation Of Alpha-Beta T Cell Proliferation (GO:0046642),0.0014534587845002347,inf,inf,['SLC4A2'],0.0030684129895004954,0,0,1
+6,"Regulation Of CD8-positive, Alpha-Beta T Cell Proliferation (GO:2000564)",0.0014534587845002347,inf,inf,['SLC4A2'],0.0030684129895004954,0,0,1
+7,"Negative Regulation Of CD8-positive, Alpha-Beta T Cell Activation (GO:2001186)",0.0014534587845002347,inf,inf,['SLC4A2'],0.0030684129895004954,0,0,1
+8,Regulation Of Bone Remodeling (GO:0046850),0.0014534587845002347,inf,inf,['SLC4A2'],0.0030684129895004954,0,0,1
+9,Bicarbonate Transport (GO:0015701),0.0014534587845002347,inf,inf,['SLC4A2'],0.0030684129895004954,0,0,1
+10,One-Carbon Compound Transport (GO:0019755),0.0021801935141401094,inf,inf,['SLC4A2'],0.004142367676866207,0,0,1
+11,Osteoclast Differentiation (GO:0030316),0.0029069294583715763,inf,inf,['SLC4A2'],0.004602638309088329,0,0,1
+12,Regulation Of Bone Resorption (GO:0045124),0.0029069294583715763,inf,inf,['SLC4A2'],0.004602638309088329,0,0,1
+13,Regulation Of Actin Filament-Based Process (GO:0032970),0.004360403693666591,inf,inf,['SLC4A2'],0.006372897706128094,0,0,1
+14,Monoatomic Anion Transport (GO:0006820),0.005087141649838639,inf,inf,['SLC4A2'],0.00690397795335244,0,0,1
+15,Regulation Of Actin Cytoskeleton Organization (GO:0032956),0.005813880031962282,inf,inf,['SLC4A2'],0.00690398253795521,0,0,1
+16,Organic Anion Transport (GO:0015711),0.005813880031962282,inf,inf,['SLC4A2'],0.00690398253795521,0,0,1
+17,Regulation Of Cytoskeleton Organization (GO:0051493),0.006540618774093245,inf,inf,['SLC4A2'],0.007310103335751274,0,0,1
+18,Myeloid Leukocyte Differentiation (GO:0002573),0.007994097153394886,inf,inf,['SLC4A2'],0.008438213661916823,0,0,1
+19,Monoatomic Ion Transport (GO:0006811),0.009447576506566517,inf,inf,['SLC4A2'],0.009447576506566517,0,0,1

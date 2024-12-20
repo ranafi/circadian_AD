@@ -1,0 +1,178 @@
+---
+title: "Pseudobulk_vs_Chen"
+format: html
+editor: visual
+---
+
+### This notebook is for generating a comparison between the experimental results of Chen et al. and the predictions for the CTL subjects in my data.
+
+Load packages
+
+```{r}
+library(tidyverse)
+library(NMOF)
+```
+
+Define functions for optimization
+
+```{r}
+cosine_distance <- function(xs, ys) {
+  1 - cos(xs - ys)
+}
+
+gridfunc = function(param, true_phases, pred_phases){
+  shift_from_original = param[1]
+  mean(cosine_distance(true_phases, (pred_phases + shift_from_original)%%(2*pi))^2)
+}
+
+find_best_forward_backward_alignment_grid_search <- function(l1, l2) {
+  true_phases = l1[!is.na(l2)]
+  pred_phases = l2[!is.na(l2)]
+  
+  forward_search = gridSearch(gridfunc, levels = list(x =  seq(-2*pi, 2*pi, by = .05)), method = 'multicore', mc.control = list(mc.cores = 10), true_phases = true_phases, pred_phases = pred_phases)
+  forward_min = forward_search$minfun
+  forward_shift = forward_search$minlevel
+  forward_list_of_phases = (pred_phases+forward_shift)%%(2*pi)
+  
+  pred_phases = (-l2[!is.na(l2)])%%(2*pi)
+  
+  # reverse_search = gridSearch(gridfunc, levels = list(x =  seq(-2*pi, 2*pi, by = .05)), method = 'multicore', mc.control = list(mc.cores = 10), true_phases = true_phases, pred_phases = pred_phases)
+  # reverse_min = reverse_search$minfun
+  # reverse_shift = reverse_search$minlevel
+  # reverse_list_of_phases = (pred_phases+reverse_shift)%%(2*pi)
+  # 
+  #if(forward_min < reverse_min) {
+  # return(forward_list_of_phases)
+  #}
+  # return(reverse_list_of_phases)
+  return(forward_list_of_phases)
+}
+
+```
+
+Read in Chen et al. ([**https://doi.org/10.1073/pnas.1508249112**](https://doi.org/10.1073/pnas.1508249112)**)** data
+
+```{r}
+library(openxlsx)
+
+# URL of the file you want to download
+url <- "https://www.pnas.org/doi/suppl/10.1073/pnas.1508249112/suppl_file/pnas.1508249112.sd01.xlsx"
+
+# # Temporary file path to save the downloaded file
+url = "~/Downloads/pnas.1508249112.sd01 (1).xlsx"
+
+# Print the path to the downloaded file
+Chen_acrophases =  read.xlsx(url,sheet=1)
+#keep genes with significance < 0.2
+Chen_acrophases = dplyr::filter(Chen_acrophases, BA11.qval  < 0.1) %>% dplyr::select(Gene, BA11.Peak)
+# Chen_acrophases = dplyr::filter(Chen_acrophases, Combined.qval  < 0.05) %>% dplyr::select(Gene, BA11.Peak)
+#rename C1orf51 -> CIART
+Chen_acrophases[1,1] = "CIART"
+#Convert gene acrophase to radians
+Chen_acrophases$BA11.Peak_mod = ((Chen_acrophases$BA11.Peak) *pi / 12) %% (2*pi)
+```
+
+Get Human Remapping dictionary:
+
+```{r}
+human_symb_remap = read.csv("https://data.broadinstitute.org/gsea-msigdb/msigdb/annotations/human/Human_Gene_Symbol_with_Remapping_MSigDB.v2024.1.Hs.chip",sep="\t")
+
+check_for_alias <- function(gene_list){
+  translation_dict = filter(human_symb_remap, Probe.Set.ID %in% gene_list)
+  
+  }
+trans_dict = check_for_alias(Chen_acrophases$Gene)
+Chen_acrophases$Gene_symbol_remapped = trans_dict$Gene.Symbol[match(Chen_acrophases$Gene, trans_dict$Probe.Set.ID)]
+```
+
+Read in predicted gene acrophases from my data:
+
+```{r}
+pseudobulk_acros = read_csv("../Cyclops_ordering/downstream_output_Pseudobulk_all/cosinor_results_CTL.csv", show_col_types = F)
+
+# Which genes are only found (in rosmap expression data) with remapping?
+genes_found_remapping_only_idx = which(Chen_acrophases$Gene_symbol_remapped %in% pseudobulk_acros$Gene_Symbols & !(Chen_acrophases$Gene %in% pseudobulk_acros$Gene_Symbols))
+
+Chen_acrophases$Symbol_final = Chen_acrophases$Gene
+Chen_acrophases$Symbol_final[genes_found_remapping_only_idx] = Chen_acrophases$Gene_symbol_remapped[genes_found_remapping_only_idx]
+
+#filter out genes in my data that are significantly cycling and also in Chen list:
+tmp = dplyr::filter(pseudobulk_acros, (Gene_Symbols %in% Chen_acrophases$Symbol_final) & as.numeric(BHQ) < 0.1 & as.numeric(amp_ratio) > 0.2) %>% dplyr::select(Gene_Symbols, acrophase, BHQ)
+
+
+#merge the Chen info with my info
+df = merge(Chen_acrophases, tmp, by.x = "Symbol_final", by.y = "Gene_Symbols" )
+
+df$shifted_phase = find_best_forward_backward_alignment_grid_search(df$BA11.Peak_mod, as.numeric(df$acrophase))
+
+```
+
+### Plot
+
+```{r}
+library(circular)
+source("../Analysis_scripts/downstream_helpers/CircularCorrelations.R")
+Fischer_Circular_CorrelationMeasures(df$BA11.Peak_mod, df$shifted_phase)
+Jammalamadaka_Circular_CorrelationMeasures(df$BA11.Peak_mod, df$shifted_phase)
+
+core_clock = toupper(c("Arntl", "Clock", "Npas2", "Nr1d1", "Bhlhe41",   "Nr1d2", "Dbp", "Ciart", "Per1", "Per3", "Tef", "Hlf", "Cry2","Per2", "Cry1", "Rorc", "Nfil3"))
+  
+# Calculate circular correlation
+circular_corr <- cor.circular(df$BA11.Peak_mod, df$shifted_phase, test = T)
+ 
+out = ggplot(df, aes(x = BA11.Peak_mod, y = shifted_phase, label = Gene) )+
+  geom_point(shape = 16, size = 2, alpha = .7,color = "#0091ff")+
+  xlim(0, 2*pi)+
+  ylim(0, 2*pi)+
+  # geom_text(hjust=0, vjust=0)+
+  ggrepel::geom_text_repel(data = subset(df, Gene %in% core_clock),
+                  aes(label = Gene),
+                  box.padding = 0.5, 
+                  point.padding = 0.5,
+                  size = 5)+
+  ylab("Predicted Gene Acrophase in ROSMAP")+
+  xlab("Measured Gene Acrophase from Chen et al.")+
+  ggtitle(paste0("Circular Correlation: ", round(circular_corr$cor, 2), ", p-val: ", round(circular_corr$p.value, 3)))+
+  scale_x_continuous(breaks = seq(0, 2 * pi, by = pi/2),
+                  labels = c("0", expression(pi/2), expression(pi),                           expression(3*pi/2), expression(2*pi))) +
+  scale_y_continuous(breaks = seq(0, 2 * pi, by = pi/2),
+                  labels = c("0", expression(pi/2), expression(pi),                           expression(3*pi/2), expression(2*pi)))+
+  theme_minimal()+
+  theme(
+    axis.text.x = element_text(size = 14),    # Increase x-axis text size
+    axis.text.y = element_text(size = 14),    # Increase y-axis text size
+    axis.title.x = element_text(size = 16),   # Increase x-axis title size
+    axis.title.y = element_text(size = 16),   # Increase y-axis title size
+    legend.title = element_text(size = 12)    # Increase legend title size
+  )
+print(out)
+```
+
+## save pdf
+
+```{r}
+ggsave("~/Desktop/CYCLOPS_CTL_bulkBHQ1AR20_vs_Chen_acrophasesBHQ1.pdf", plot = out, width = 5, height = 5, units = "in")
+```
+
+The best alignment isn't allowed to flip the phases, so check here that they wern't flipped:
+
+```{r}
+plot(df$shifted_phase, df$acrophase)
+```
+
+### Clock Face Plots
+
+```{r}
+
+isCyclingBHQCutoff = 0.1
+path_to_cyclops_ordering = "/"
+setwd(path_to_cyclops_ordering)
+reference = dplyr::select(Chen_acrophases, BA11.Peak_mod, Symbol_final)
+colnames(reference) = c("acrophase", "Gene_Symbols")
+reference = filter(reference, Gene_Symbols %in% core_clock)
+
+#for cycling_in_CTL.csv
+plot_clock_face(paste0(path_to_cyclops_ordering, "/downstream_output_Pseudobulk_all/plots/CTL_clock_face_plot_AR1_VS_Chen_CTLs.png"), "downstream_output_Pseudobulk_all/cosinor_results_CTL.csv", mouse_data = reference, BHQ_cutoff = isCyclingBHQCutoff, amp_ratio_cutoff = 0.1, best_align = T)
+#plot_clock_face(paste0(path_to_cyclops_ordering, "/downstream_output_Pseudobulk_all/plots/CTL_clock_face_plot_VS_Chen_CTLs.png"), "downstream_output_Pseudobulk_all/cosinor_results_CTL.csv", mouse_data = reference, BHQ_cutoff = isCyclingBHQCutoff, amp_ratio_cutoff = 0.0)
+
+```

@@ -1,0 +1,422 @@
+---
+title: "Create_gmt_for_sleepwake_pathway"
+format: html
+editor: visual
+---
+
+### Load Libraries
+
+```{r}
+library(grr)
+library(tidyverse)
+```
+
+# Pack Sleep List
+
+### Read in Supplement file:
+
+```{r}
+supplement = read.delim("genes_for_BmalKO_and_sleep_geneset_analyses/Mackiewics_et_al_supp_table_1.txt", skip = 3, sep ="\t")
+
+```
+
+There is another supplemental file that has the mean expression in both conditions for all DE genes. This doesn't rely on any linear regression to find genes "increasing" or "decreasing" with sleep or sleep dep.
+
+```{r}
+supp2 = readxl::read_excel("genes_for_BmalKO_and_sleep_geneset_analyses/Supplemental_Table_S2_cerebral__cortex.xlsx", skip = 3)
+#check that all the genes in supplement 2 are in supplement 1, indeed yes
+all(supp2$`Affymetrix id` %in% supplement$Affymetrix.id)
+
+#get extrez gene Ids for all supplement 2 genes
+supp2 = merge(supp2, dplyr::select(supplement, Affymetrix.id, Entrez.Gene), by.x = "Affymetrix id", by.y = "Affymetrix.id")
+
+DE_down = filter(supp2, `Difference in MEAN` > 0) %>% dplyr::select(`Affymetrix id`, Entrez.Gene)
+DE_up = filter(supp2, `Difference in MEAN` < 0)  %>% dplyr::select(`Affymetrix id`, Entrez.Gene)
+
+```
+
+### Create translation dict from Mouse Entrez -\> human gene symbols
+
+```{r}
+translation_dict = read.delim("../Analysis_scripts/MsigDB_gmts_for_GSEA/Mouse_Gene_Symbol_Remapping_Human_Orthologs_MSigDB.v2024.1.Hs.chip")
+# Mouse_NCBI_to_gene = read.delim("../Analysis_scripts/MsigDB_gmts_for_GSEA/Mouse_NCBI_Gene_ID_MSigDB.v2024.1.Mm.chip")
+# HumanGene_to_mouseGene = read.delim("../Analysis_scripts/MsigDB_gmts_for_GSEA/Human_Gene_Symbol_with_Remapping_Mouse_Orthologs_MSigDB.v2024.1.Mm.chip")
+
+colnames(translation_dict)[2] = "Human_Gene_Symbols"
+
+# translation_dict = merge(Mouse_NCBI_to_gene, HumanGene_to_mouseGene, by = "Gene.Symbol")
+```
+
+### Translate Mouse EntrezID to human gene symbols
+
+```{r}
+supplement = merge(supplement, translation_dict, by.x = "Gene.Symbol", by.y = "Probe.Set.ID")
+
+#suplement has many rows because many entrezID from mouse link to multiple human gene symbols.
+```
+
+### Form Dataframe from supplement
+
+```{r}
+df = unite(supplement, "pathway_name", sleep:wake, remove = F)
+df$pathway_name = str_replace(df$pathway_name ,"_", "_wake_") %>% str_replace(. , " ", "_") %>% paste0("sleep_", .)
+df = dplyr::select(df, Affymetrix.id, pathway_name, category, Human_Gene_Symbols) %>% drop_na()
+
+#rename pathways whose categories are DE_down or DE_up
+df <- df %>%
+  mutate(pathway_name = case_when(
+    category == "DE_up" ~ "DE_ANOVA_SD_up",
+    category == "DE_down" ~ "DE_ANOVA_SD_down",
+    TRUE ~ pathway_name  # Keep the original value if no condition is met
+  ))
+
+df = dplyr::select(df, Affymetrix.id, pathway_name, category, Human_Gene_Symbols) %>% distinct() %>% drop_na()
+```
+
+### Restrict dataframe to genes expressed in my human data:
+
+No longer doing this, going to let remapping happen in fgsea script
+
+```{r}
+# load("../rosmap437_pseudobulk_by_cluster_all_celltypes.rda")
+# possible_human_gene_names = rownames(counts)
+# 
+# #Still a chance we can recover some genes with human chip remapping:
+# Human_symbol_remapping = read.delim("../Analysis_scripts/MsigDB_gmts_for_GSEA/Human_Gene_Symbol_with_Remapping_MSigDB.v2024.1.Hs.chip")
+# 
+# # Step 1: Join `df` with `Human_symbol_remapping` on human genes
+# df_joined_genes = merge(df, Human_symbol_remapping, by.x = "Human_Gene_Symbols", by.y = "Probe.Set.ID")
+# 
+# all(df_joined_genes$Human_Gene_Symbols == df_joined_genes$Gene.Symbol)
+# #No aliases found by joining those df. Try the other direction:
+# 
+# # Step 2: Join `df` with `Human_symbol_remapping` on `Gene.Symbol` (Alias)
+# df_joined_synonyms = merge(df, Human_symbol_remapping, by.x = "Human_Gene_Symbols", by.y = "Gene.Symbol")
+# 
+# table(df_joined_synonyms$Human_Gene_Symbols == df_joined_synonyms$Probe.Set.ID)
+# 
+# setdiff(df_joined_synonyms$Human_Gene_Symbols, df_joined_synonyms$Probe.Set.ID)
+# 
+# # Step 3: Determine the `unified_name`
+# df_with_alias = df_joined_synonyms %>%
+#   mutate(unified_name = case_when(
+#     Probe.Set.ID %in% possible_human_gene_names ~ Probe.Set.ID, # If Probe.Set.ID is in ROSMAP, use it
+#     TRUE ~ NA_character_ # If neither is in true_names, set unified to NA
+#   ))
+
+# df = dplyr::select(df, Affymetrix.id, pathway_name, category, Human_Gene_Symbols) %>% distinct() %>% drop_na()
+
+
+
+```
+
+### Make a new categories (from supp2) that is all ANOVA DE genes up/down with SD:
+
+```{r}
+#get affy names from de_up list
+de_up_affy_genes = dplyr::select(DE_up, `Affymetrix id`)
+#match these affy names to affy names in supp table1, and then use the human gene symbols we already found:
+de_up_final_hgs = merge(de_up_affy_genes, df, by.x = "Affymetrix id", by.y = "Affymetrix.id") %>% dplyr::select(Human_Gene_Symbols) %>% unname %>% unlist
+
+#same for SD down regulated genes:
+de_down_affy_genes = dplyr::select(DE_down, `Affymetrix id`)
+de_down_final_hgs = merge(de_down_affy_genes, df, by.x = "Affymetrix id", by.y = "Affymetrix.id") %>% dplyr::select(Human_Gene_Symbols) %>% unname %>% unlist
+
+#Format rows so I can bind them to established df:
+de_down = cbind("DE_ANOVA_DOWN_SD", "DE_down", unique(de_down_final_hgs))
+de_up = cbind("DE_ANOVA_UP_SD", "DE_up", unique(de_up_final_hgs))
+df = dplyr::select(df, !Affymetrix.id)
+colnames(de_down) = colnames(de_up) = colnames(df)
+
+df = rbind(df, de_down, de_up)
+```
+
+### Make a new category that is just all sleep wake genes:
+
+```{r}
+all_de_genes= cbind("All_DE_sleep_wake_genes","10",unique(df$Human_Gene_Symbols))
+colnames(all_de_genes) = colnames(df)
+
+df = rbind(df, all_de_genes)
+```
+
+### Make Specialty Categories:
+
+```{r}
+
+up_in_sleep_23 = cbind("Up_sleep_2OR3", "2OR3",filter(df, category == 2 | category == 3) %>% dplyr::select(Human_Gene_Symbols))
+colnames(up_in_sleep_23) = colnames(df)
+
+down_in_sleep_78 = cbind("Down_sleep_7OR8", "7OR8",filter(df, category == 7 | category == 8) %>% dplyr::select(Human_Gene_Symbols))
+
+up_in_SD_47 = cbind("Up_SD_4OR7","4OR7" ,filter(df, category == 4 | category == 7) %>% dplyr::select(Human_Gene_Symbols))
+
+down_in_SD_36 = cbind("Down_SD_3OR6","3OR6" , filter(df, category == 3 | category == 6) %>% dplyr::select(Human_Gene_Symbols))
+
+colnames(up_in_sleep_23) = colnames(down_in_sleep_78) = colnames(up_in_SD_47)= colnames(down_in_SD_36) = colnames(df)
+df = rbind(df, up_in_sleep_23, down_in_sleep_78, up_in_SD_47, down_in_SD_36) %>% distinct()
+```
+
+### Make a GMT File:
+
+```{r}
+gmt = df %>% 
+      group_by(category)%>%
+      mutate(row = row_number()) %>%
+      pivot_wider(names_from = row, values_from = Human_Gene_Symbols)
+
+#***CAUTION***, when you write out this file, there will be "" tab "" tab "" etc. after each pathway, I removed those by hand in textEdit. Also make sure to add a newline character to the end of the file
+
+# write.table(gmt, "../Analysis_scripts/MsigDB_gmts_for_GSEA/sleep_wake_pathways_w_human_orthologs.gmt", sep = '\t', quote = F, row.names = F,  col.names = F, na = "")
+
+```
+
+These simplified/combined groups are subsets of de_down, right?
+
+```{r}
+all(up_in_sleep_23$Human_Gene_Symbols %in% de_down[,3])
+all(down_in_SD_36$Human_Gene_Symbols %in% de_down[,3])
+```
+
+# BMAL KO gene sets
+
+from <https://insight.jci.org/articles/view/162771>
+
+### Create translation dict from Mouse symbol -\> human symbols (Repeat here in case code above has not run)
+
+```{r}
+translation_dict = read.delim("../Analysis_scripts/MsigDB_gmts_for_GSEA/Mouse_Gene_Symbol_Remapping_Human_Orthologs_MSigDB.v2024.1.Hs.chip")
+colnames(translation_dict)[2] = "Human_Gene_Symbols"
+# Mouse_NCBI_to_gene = read.delim("../Analysis_scripts/MsigDB_gmts_for_GSEA/Mouse_NCBI_Gene_ID_MSigDB.v2024.1.Mm.chip")
+# HumanGene_to_mouseGene = read.delim("../Analysis_scripts/MsigDB_gmts_for_GSEA/Human_Gene_Symbol_with_Remapping_Mouse_Orthologs_MSigDB.v2024.1.Mm.chip")
+# 
+# colnames(HumanGene_to_mouseGene)[1] = "Human_Gene_Symbols"
+# translation_dict = merge(Mouse_NCBI_to_gene, HumanGene_to_mouseGene, by = "Gene.Symbol")
+
+#Read in possible human gene names:
+# load("../rosmap437_pseudobulk_by_cluster_all_celltypes.rda")
+# possible_human_gene_names = rownames(counts)
+```
+
+### Read in results from cortex:
+
+```{r}
+cortex_DEGs = read_csv("genes_for_BmalKO_and_sleep_geneset_analyses/Camk2cortex_counts_deseq.csv", show_col_types = F)
+cortex_DEGs_filtered_BHQ1 = filter(cortex_DEGs, padj < 0.1) %>% select(external_gene_name)
+cortex_DEGs_BHQ1_downReg = filter(cortex_DEGs, padj < 0.1 & log2FoldChange < 0) %>% select(external_gene_name)
+cortex_DEGs_BHQ1_upReg = filter(cortex_DEGs, padj < 0.1 & log2FoldChange > 0) %>% select(external_gene_name)
+cortex_DEGs_filtered_BHQ05 = filter(cortex_DEGs, padj < 0.05) %>% select(external_gene_name)
+#Checks
+stopifnot(all(cortex_DEGs_filtered_BHQ05$external_gene_name %in% cortex_DEGs_filtered_BHQ1$external_gene_name ))
+stopifnot(all(cortex_DEGs_BHQ1_downReg$external_gene_name %in% cortex_DEGs_filtered_BHQ1$external_gene_name))
+stopifnot(all(cortex_DEGs_BHQ1_upReg$external_gene_name %in% cortex_DEGs_filtered_BHQ1$external_gene_name))
+
+midbrain_DEGs = read_csv("genes_for_BmalKO_and_sleep_geneset_analyses/midbrainCounts_Deseq.csv", show_col_types = F)
+midbrain_DEGs_filtered_BHQ1 = filter(midbrain_DEGs, padj < 0.1) %>% select(external_gene_name)
+midbrain_DEGs_BHQ1_downReg = filter(midbrain_DEGs, padj < 0.1 & log2FoldChange < 0) %>% select(external_gene_name)
+midbrain_DEGs_BHQ1_upReg = filter(midbrain_DEGs, padj < 0.1 & log2FoldChange> 0) %>% select(external_gene_name)
+midbrain_DEGs_filtered_BHQ05 = filter(midbrain_DEGs, padj < 0.05) %>% select(external_gene_name)
+#Checks
+stopifnot(all(midbrain_DEGs_filtered_BHQ05$external_gene_name %in% midbrain_DEGs_filtered_BHQ1$external_gene_name ))
+stopifnot(all(midbrain_DEGs_BHQ1_downReg$external_gene_name %in% midbrain_DEGs_filtered_BHQ1$external_gene_name))
+stopifnot(all(midbrain_DEGs_BHQ1_upReg$external_gene_name %in% midbrain_DEGs_filtered_BHQ1$external_gene_name))
+
+
+# Add source column and combine
+combined_df <- bind_rows(
+  cortex_DEGs_filtered_BHQ05 %>%
+    mutate(pathway = "cortex_DEG_BHQ05", category = 1),
+  cortex_DEGs_filtered_BHQ1 %>%
+    mutate(pathway = "cortex_DEG_BHQ1", category = 2),
+  cortex_DEGs_BHQ1_downReg %>%
+    mutate(pathway = "cortex_DEG_BHQ1_negativeL2FC", category = 3),
+  cortex_DEGs_BHQ1_upReg %>%
+    mutate(pathway = "cortex_DEG_BHQ1_positiveL2FC", category = 4),
+  midbrain_DEGs_filtered_BHQ05 %>% 
+    mutate(pathway = "midbrain_DEG_BHQ05", category = 5),
+  midbrain_DEGs_filtered_BHQ1 %>%
+    mutate(pathway = "midbrain_DEG_BHQ1", category = 6),
+  midbrain_DEGs_BHQ1_downReg %>%
+    mutate(pathway = "midbrain_DEG_BHQ1_negativeL2FC", category = 7),
+  midbrain_DEGs_BHQ1_upReg %>%
+    mutate(pathway = "midbrain_DEG_BHQ1_positiveL2FC", category = 8)
+)
+
+DEG_orthos = merge(combined_df, select(translation_dict, Probe.Set.ID, Human_Gene_Symbols), by.x = "external_gene_name", by.y = "Probe.Set.ID")
+
+###Not doing remapping here, letting remap in fgsea handle it##
+# #Still a chance we can recover some genes with human chip remapping:
+# Human_symbol_remapping = read.delim("../Analysis_scripts/MsigDB_gmts_for_GSEA/Human_Gene_Symbol_with_Remapping_MSigDB.v2024.1.Hs.chip")
+# 
+# combined_df_with_alias = merge(DEG_orthos, Human_symbol_remapping, by.x = "Human_Gene_Symbols", by.y = "Probe.Set.ID", all.y = F, all.x = T)
+#   
+# all(combined_df_with_alias$Human_Gene_Symbols == combined_df_with_alias$Gene.Symbol)
+# 
+# combined_df_with_alias = combined_df_with_alias %>%
+#   mutate(unified_name = case_when(
+#     Gene.Symbol %in% possible_human_gene_names ~ Gene.Symbol,
+#     TRUE ~ NA_character_
+#   ))
+
+DEGs_human_symbols = select(DEG_orthos, Human_Gene_Symbols, pathway, category) %>% distinct() %>% drop_na()
+
+```
+
+Write out BMAL-KO GMT:
+
+```{r}
+######Double check that bhq subsets are still subsets: ##########
+cort_05 = filter(DEGs_human_symbols, pathway == "cortex_DEG_BHQ05") %>% select(Human_Gene_Symbols) %>% unname %>% unlist
+cort_1 = filter(DEGs_human_symbols, pathway == "cortex_DEG_BHQ1") %>% select(Human_Gene_Symbols)  %>% unname %>% unlist
+stopifnot(all(cort_05 %in% cort_1))
+cort_1_up = filter(DEGs_human_symbols, pathway == "cortex_DEG_BHQ1_positiveL2FC") %>% select(Human_Gene_Symbols)  %>% unname %>% unlist
+cort_1_down = filter(DEGs_human_symbols, pathway == "cortex_DEG_BHQ1_negativeL2FC") %>% select(Human_Gene_Symbols)  %>% unname %>% unlist
+stopifnot(is_empty(setdiff(cort_1, c(cort_1_up, cort_1_down))))
+stopifnot(is_empty(setdiff(c(cort_1_up, cort_1_down), cort_1)))
+
+mid_05 = filter(DEGs_human_symbols, pathway == "midbrain_DEG_BHQ05") %>% select(Human_Gene_Symbols)  %>% unname %>% unlist
+mid_1 = filter(DEGs_human_symbols, pathway == "midbrain_DEG_BHQ1") %>% select(Human_Gene_Symbols)  %>% unname %>% unlist
+stopifnot(all(mid_05 %in% mid_1))
+mid_1_up = filter(DEGs_human_symbols, pathway == "midbrain_DEG_BHQ1_positiveL2FC") %>% select(Human_Gene_Symbols) %>% unname %>% unlist
+mid_1_down = filter(DEGs_human_symbols, pathway == "midbrain_DEG_BHQ1_negativeL2FC") %>% select(Human_Gene_Symbols) %>% unname %>% unlist
+
+stopifnot(is_empty(setdiff(mid_1, c(mid_1_up, mid_1_down))))
+stopifnot(is_empty(setdiff(c(mid_1_up, mid_1_down), mid_1)))
+#############################################################
+
+BMAL_gmt = DEGs_human_symbols %>% 
+      group_by(category)%>%
+      mutate(row = row_number()) %>%
+      pivot_wider(names_from = row, values_from = Human_Gene_Symbols)
+#***CAUTION***, when you write out this file, there will be "" tab "" tab "" etc. after each pathway, I removed those by hand in textEdit. Also make sure to add a newline character to the end of the file
+
+# write.table(BMAL_gmt, "../Analysis_scripts/MsigDB_gmts_for_GSEA/BMALKO_pathways_w_human_orthologs.gmt", sep = '\t', quote = F, row.names = F,  col.names = F, na = "")
+```
+
+# AD GWAS Gene Set
+
+```{r}
+GWAS_genes = c("ABCA1", "ABCA7", "ABI3", "ACE", "ADAM17", "ADAMTS1", "ANK3", "ANKH", "APH1B", "APP", "BCKDK", "BIN1", "BLNK", "CASS4", "CD2AP",
+"CLNK", "CLU", "COX7C", "CR1", "CTSB", "CTSH", "DOC2A", "EED", "EPDR1", "EPHA1", "FERMT2", "FOXF1", "GRN", "HLA-DQA1", "HS3ST5",
+"ICA1", "IDUA", "IGH", "IL34", "INPP5D", "JAZF1", "KLF16", "LILRB2", "MAF", "MINDY2", "MME", "MS4A4A", "MYO15A", "NCK2", "PLCG2",
+"PLEKHA1", "PRDM7", "PRKD3", "PTK2B", "RASGEF1C", "RBCK1", "RHOH", "SCIMP", "SEC61G", "SHARPIN", "SIGLEC11", "SLC24A4", "SLC2A4RG",
+"SNX1", "SORL1", "SORT1", "SPDYE3", "SPI1", "SPPL2A", "TMEM106B", "TNIP1", "TPCN1", "TREM2", "TREML2", "TSPAN14", "TSPOAP1",
+"UMAD1", "UNC5CL", "USP6NL", "WDR12", "WDR81", "WNT3")
+
+df_GWAS = data.frame(Gene_Symbols = GWAS_genes)
+
+Human_symbol_remapping = read.delim("../Analysis_scripts/MsigDB_gmts_for_GSEA/Human_Gene_Symbol_with_Remapping_MSigDB.v2024.1.Hs.chip")
+
+df_GWAS_merged = merge(df_GWAS, Human_symbol_remapping, by.x = "Gene_Symbols",by.y = "Probe.Set.ID", all.y = F, all.x = T )
+
+remapped_idx = which(!(is.na(df_GWAS_merged$Gene.Symbol))) #idx of ranks_merged found in gene_dict
+
+df_GWAS_merged$Gene_Symbols[remapped_idx] = df_GWAS_merged$Gene.Symbol[remapped_idx] #rename first column if found
+
+GWAS_genes = c("AD_GWAS_genes", "1", df_GWAS_merged$Gene_Symbols)
+# write.table(t(GWAS_genes), "../Analysis_scripts/MsigDB_gmts_for_GSEA/AD_GWAS_genes.gmt", sep = '\t', quote = F, row.names = F,  col.names = F, na = "")
+```
+
+# Create Figure 3 subplot
+
+### Make Venn Diagram Figure
+
+```{r}
+# # What loses rhythms in Exc neurons?
+# Exc_lose_AR20 = read_csv("../Cyclops_ordering/downstream_output_Exc_All/enrichR_files/DR_lostAmpAD_CyclingBHQ1AR20_DRBHQ3.csv", show_col_types = F) %>% select(Gene_Symbols)%>% unlist%>%unname
+# 
+# Inh_lose_AR20 = read_csv("../Cyclops_ordering/downstream_output_Inhib_All/enrichR_files/DR_lostAmpAD_CyclingBHQ1AR20_DRBHQ3.csv", show_col_types = F)%>% select(Gene_Symbols)%>% unlist%>%unname
+# 
+# 
+# Mglia_lose_AR20 = read_csv("../Cyclops_ordering/downstream_output_Mglia_All/enrichR_files/DR_lostAmpAD_CyclingBHQ1AR20_DRBHQ3.csv", show_col_types = F)%>% select(Gene_Symbols)%>% unlist%>%unname
+# 
+# library(ggvenn)
+# x = list(`Upregulated in Sleep` =up_in_sleep_23$unified_name, Exc = Exc_lose_AR20, Inh = Inh_lose_AR20, Mglia = Mglia_lose_AR20)
+# ggvenn(
+#   x, 
+#   fill_color = c("#0073C2FF", "#EFC000FF", "#868686FF", "#CD534CFF"),
+#   stroke_size = 0.5, set_name_size = 4
+#   )
+```
+
+### Make Dot Plot
+
+```{r}
+library(scales)
+
+# pathways_of_interest = c("Down_SD_3OR6","midbrain_DEG_BHQ1")
+pathways_of_interest = c("All_DE_sleep_wake_genes","midbrain_DEG_BHQ1")
+
+Exc_neurons_sleep_pathway = read_csv("../Cyclops_ordering/downstream_output_Exc_All/fGSEA/fGSEA_results_sleep_wake/DRgenesAmpRatio20_Log(AD-CTL)ranked.csv", show_col_types = F) %>% filter(pathway %in% pathways_of_interest)
+Inh_neurons_sleep_pathway = read_csv("../Cyclops_ordering/downstream_output_Inhib_All/fGSEA/fGSEA_results_sleep_wake/DRgenesAmpRatio20_Log(AD-CTL)ranked.csv", show_col_types = F) %>% filter(pathway %in% pathways_of_interest)
+Ast_neurons_sleep_pathway = read_csv("../Cyclops_ordering/downstream_output_Ast_All/fGSEA/fGSEA_results_sleep_wake/DRgenesAmpRatio20_Log(AD-CTL)ranked.csv", show_col_types = F) %>% filter(pathway %in% pathways_of_interest)
+Mglia_neurons_sleep_pathway = read_csv("../Cyclops_ordering/downstream_output_Mglia_All/fGSEA/fGSEA_results_sleep_wake/DRgenesAmpRatio20_Log(AD-CTL)ranked.csv", show_col_types = F) %>% filter(pathway %in% pathways_of_interest)
+
+df = rbind(Exc_neurons_sleep_pathway, Inh_neurons_sleep_pathway, Ast_neurons_sleep_pathway, Mglia_neurons_sleep_pathway)
+cell_types = rep(c("Excitatory", "Inhibitory", "Astrocytes", "Microglia"), each = 2)
+df$cell_type = cell_types
+
+df = unite(df, label, cell_type, pathway, remove = F)
+df$label = df$label %>% str_replace_all("All_DE_sleep_wake_genes", "Sleep DE Genes") %>% str_replace_all("midbrain_DEG_BHQ1", "ARNTL KO DE Genes")  %>% str_replace_all("_", " ")
+
+df_sleep = filter(df, grepl("Sleep", label))
+df_KO = filter(df, grepl("KO", label))
+
+#Desired order:
+# Reorder the y-axis by setting factor levels
+desired_order= c("Excitatory","Inhibitory","Astrocytes", "Microglia")
+
+df_sleep$cell_type <- factor(df_sleep$cell_type, levels = rev(desired_order))
+df_KO$cell_type <- factor(df_KO$cell_type, levels = rev(desired_order))
+
+# df$category_wrapped <- str_wrap(df$label, width = 20)
+
+# Shared scale parameters
+size_limits <- c(20, 1200)  # Set the range of size values
+size_range <- c(5, 10)  # Set the range of dot sizes in the plot
+
+# Create a sleep dot plot
+p1 = ggplot(df_sleep, aes(x = NES, y = cell_type, color = -log10(padj), size = size)) +
+  geom_segment(aes(x = 0, xend = NES, y = cell_type, yend = cell_type), 
+                linetype = "dotted", color = "gray", linewidth = 1) + # Add dotted lines
+  geom_point() +  # Adjust the size of the dots if needed
+  scale_size_continuous(range = c(5, 10), limits = size_limits) +  # Adjust the range of point sizes (min, max)
+  scale_color_gradient(low = "#4575b4", high = "#d73027", limits = c(0, 10),  # Set the visible range
+    oob = squish ) +  # Customize the color gradient
+  scale_x_reverse()+
+  xlim(0,-3)+
+
+  labs(x = "NES", y = "Cell Type", color = "-Log10(BH.q)", title = "Genes Affected by Sleep") +  # Label axes and legend
+  theme_minimal() + # Use a clean theme
+    theme(
+    axis.text.x = element_text(size = 14, angle = 0),    # Increase x-axis text size
+    axis.text.y = element_text(size = 12, angle = 45),    # Increase y-axis text size
+    axis.title.x = element_text(size = 14),   # Increase x-axis title size
+    axis.title.y = element_text(size = 14),   # Increase y-axis title size
+    legend.title = element_text(size = 12)    # Increase legend title size
+  )
+# Create a KO dot plot
+p2 = ggplot(df_KO, aes(x = NES, y = cell_type, color = -log10(padj), size = size)) +
+  geom_segment(aes(x = 0, xend = NES, y = cell_type, yend = cell_type), 
+                linetype = "dotted", color = "gray", linewidth = 1) + # Add dotted lines
+  geom_point() +  # Adjust the size of the dots if needed
+  scale_size_continuous(range = c(5, 10),  limits = size_limits) +  # Adjust the range of point sizes (min, max)
+  scale_color_gradient(low = "#4575b4", high = "#d73027", limits = c(0, 10),  # Set the visible range
+    oob = squish ) +  # Customize the color gradient
+  scale_x_reverse()+
+  xlim(0,-3.0)+
+  labs(x = "NES", y = "Cell Type",
+       color = "-Log10(BH.q)", title = "Genes Affected by ARNTL KO") +#Label axes and legend
+  theme_minimal() + # Use a clean theme
+    theme(
+    axis.text.x = element_text(size = 14, angle = 0),    # Increase x-axis text size
+    axis.text.y = element_text(size = 12, angle = 45),    # Increase y-axis text size
+    axis.title.x = element_text(size = 14),   # Increase x-axis title size
+    axis.title.y = element_text(size = 14),   # Increase y-axis title size
+    legend.title = element_text(size = 12)    # Increase legend title size
+  )
+
+ggsave("~/Desktop/Sleep_pathway.pdf", plot = p1, width = 5, height = 4, units = "in")
+ggsave("~/Desktop/ARNTL_KO_pathway.pdf", plot = p2, width = 5, height = 4, units = "in")
+
+```
