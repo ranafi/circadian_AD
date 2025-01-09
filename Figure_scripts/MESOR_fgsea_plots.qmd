@@ -1,0 +1,88 @@
+---
+title: "fGSEA_plots"
+format: html
+editor: visual
+---
+
+This notebook takes the results of fGSEA from "perform_downstream_analysis" and generated nice fGSEA dot plots.
+
+```{r}
+#load the libs
+require(ggplot2)
+require(stringr)
+require(scales)
+```
+
+Define the Functions:
+
+```{r}
+fgsea_dotplot = function(object,my_title = "GSEA",show = 15,
+          BHQ_cutoff = 0.1) {
+  plot_df = object %>% arrange(padj)%>% slice(1:show)
+  plot_df$pathway = str_to_title(str_wrap(str_replace_all(plot_df$pathway, "_", " "), 15))
+  # Shared scale parameters
+  size_limits <- c(10, 250)  # Set the range of size values
+  size_range <- c(5, 10)  # Set the range of dot sizes in the plot
+
+  #Ensure y-axis comes in the right order:
+  pathways = plot_df %>% arrange(desc(padj)) %>% select(pathway) %>% unname %>% unlist
+  plot_df$pathway = factor(plot_df$pathway,levels = pathways)
+  # Create a dot plot
+  p= ggplot(plot_df, aes(x = NES, y = pathway, color = -log10(padj), size = size)) +
+  geom_segment(aes(x = 0, xend = NES, y = pathway, yend = pathway), 
+                linetype = "dotted", color = "gray", linewidth = 1) + # Add dotted lines
+  geom_point() +  # Adjust the size of the dots if needed
+  scale_size_continuous(range = c(5, 10),  limits = size_limits) +  # Adjust the range of point sizes (min, max)
+  scale_color_gradient(low = "#4575b4", high = "#d73027", limits = c(0, 10),  # Set the visible range
+    oob = squish ) +  # Customize the color gradient
+  labs(x = "fGSEA NES", y = "Pathway",
+       color = "-Log10(BH.q)", title = my_title) +#Label axes and legend
+  theme_minimal() + # Use a clean theme
+    theme(
+    axis.text.x = element_text(size = 14, angle = 0),    # Increase x-axis text size
+    axis.text.y = element_text(size = 12, angle = 0),    # Increase y-axis text size
+    axis.title.x = element_text(size = 14),   # Increase x-axis title size
+    axis.title.y = element_text(size = 14),   # Increase y-axis title size
+    legend.title = element_text(size = 12)    # Increase legend title size
+  )
+
+  
+}
+
+plot_all_results= function(path, title){
+    setwd(path)
+    DM_pranked = read_csv("fGSEA/fGSEA_results/differential_mesor_all_genes_minusLogPRanked.csv", show_col_types = F)
+    p = fgsea_dotplot(DM_pranked, my_title = title, show = 10)
+    print(p)
+}
+```
+
+Call on different "downstream_results" folders:
+
+### Excitatory Neurons:
+
+```{r}
+plot_all_results("../Cyclops_ordering/downstream_output_Exc_all/", "Exc. differential MESOR pathways")
+ggsave("~/Desktop/Exc_DM_fgsea.pdf", device = "pdf", width = 6, height = 6)
+```
+
+### Inhibitory Neurons:
+
+```{r}
+plot_all_results("../Cyclops_ordering/downstream_output_Inhib_all/", "Inh. differential MESOR pathways")
+ggsave("~/Desktop/Inh_DM_fgsea.pdf", device = "pdf", width = 6, height = 6)
+```
+
+### Astrocytes:
+
+```{r}
+plot_all_results("../Cyclops_ordering/downstream_output_Ast_all/", "Ast. differential MESOR pathways")
+ggsave("~/Desktop/Ast_DM_fgsea.pdf", device = "pdf", width = 6, height = 6)
+```
+
+### Mglia:
+
+```{r}
+plot_all_results("../Cyclops_ordering/downstream_output_Mglia_all/", "Mic. differential MESOR pathways")
+ggsave("~/Desktop/Mglia_DM_fgsea.pdf", device = "pdf", width = 6, height = 6)
+```

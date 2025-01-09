@@ -27,12 +27,12 @@ CTL_cycling_res = read_csv(CTL_cycling_file, show_col_types = F)
 setwd("../Analysis_scripts/MsigDB_gmts_for_GSEA")
 Kegg = fgsea::gmtPathways("c2.cp.kegg_legacy.v2024.1.Hs.symbols.gmt")
 
-pathway_name = "OxPhos"
-pathway_terms = Kegg$KEGG_OXIDATIVE_PHOSPHORYLATION
+# pathway_name = "OxPhos"
+# pathway_terms = Kegg$KEGG_OXIDATIVE_PHOSPHORYLATION
 
-# pathway_name = "Ribosome"
-# pathway_terms = Kegg$KEGG_RIBOSOME
-# pathway_terms = c(pathway_terms,CTL_cycling_res$Gene_Symbols[grep("MRP[SL]", CTL_cycling_res$Gene_Symbols)] )
+pathway_name = "Ribosome"
+pathway_terms = Kegg$KEGG_RIBOSOME
+pathway_terms = c(pathway_terms,CTL_cycling_res$Gene_Symbols[grep("^MRP[SL](?!.*-.*$)", CTL_cycling_res$Gene_Symbols, perl = T)] )
 
 #find genes in pathway cycling in CTLs
 pathway_terms_cycling_CTL = filter(CTL_cycling_res, Gene_Symbols %in% pathway_terms & BHQ < 0.1) %>% dplyr::select(Gene_Symbols) %>% unname %>% unlist
@@ -247,12 +247,12 @@ library(ComplexHeatmap)
 
 
 row_names_fontzise = gpar(fontsize = 6)
-pdf(paste0("~/Desktop/",plot_names,"_", pathway_name, "_heatmap_CTL_8bins.pdf"))
-Heatmap(as.matrix(heatmap_data_CTL), col = col_fun, column_title = paste("KEGG", pathway_name, "CTL"), show_heatmap_legend = T, cluster_columns = F, cluster_rows = F, column_labels = times, row_names_side = "right", row_names_gp = row_names_fontzise, heatmap_legend_param = list(title = "Z-normed \nExpression", legend_height = unit(.2, "npc")), width = unit(.3, "npc"), height =  unit(.8, "npc"))
+pdf(paste0("~/Desktop/",plot_names,"_", pathway_name, "_heatmap_CTL_8bins.pdf"), height = 11)
+Heatmap(as.matrix(heatmap_data_CTL), col = col_fun, column_title = paste("KEGG", pathway_name, "CTL"), show_heatmap_legend = T, cluster_columns = F, cluster_rows = F, column_labels = times, row_names_side = "right", row_names_gp = row_names_fontzise, heatmap_legend_param = list(title = "Z-normed \nExpression", legend_height = unit(.2, "npc")), width = unit(.15, "npc"), height =  unit(.92, "npc"))
 dev.off()
 
-pdf(paste0("~/Desktop/",plot_names,"_", pathway_name, "_heatmap_AD_8bins.pdf"))
-Heatmap(as.matrix(heatmap_data_AD), col = col_fun, column_title = paste("KEGG", pathway_name, "AD"), show_heatmap_legend = T, cluster_columns = F, cluster_rows = F, column_labels = times, row_names_side = "right", row_names_gp = row_names_fontzise, heatmap_legend_param = list(title = "Z-normed \nExpression", legend_height = unit(.2, "npc")), width = unit(.3, "npc"), height =  unit(.8, "npc"))
+pdf(paste0("~/Desktop/",plot_names,"_", pathway_name, "_heatmap_AD_8bins.pdf"), height = 11)
+Heatmap(as.matrix(heatmap_data_AD), col = col_fun, column_title = paste("KEGG", pathway_name, "AD"), show_heatmap_legend = T, cluster_columns = F, cluster_rows = F, column_labels = times, row_names_side = "right", row_names_gp = row_names_fontzise, heatmap_legend_param = list(title = "Z-normed \nExpression", legend_height = unit(.2, "npc")), width = unit(.15, "npc"), height =  unit(.92, "npc"))
 dev.off()
 
 

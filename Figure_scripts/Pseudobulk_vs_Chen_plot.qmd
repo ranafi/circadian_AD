@@ -64,7 +64,7 @@ url = "~/Downloads/pnas.1508249112.sd01 (1).xlsx"
 # Print the path to the downloaded file
 Chen_acrophases =  read.xlsx(url,sheet=1)
 #keep genes with significance < 0.2
-Chen_acrophases = dplyr::filter(Chen_acrophases, BA11.qval  < 0.1) %>% dplyr::select(Gene, BA11.Peak)
+Chen_acrophases = dplyr::filter(Chen_acrophases, BA11.qval  < 0.2) %>% dplyr::select(Gene, BA11.Peak)
 # Chen_acrophases = dplyr::filter(Chen_acrophases, Combined.qval  < 0.05) %>% dplyr::select(Gene, BA11.Peak)
 #rename C1orf51 -> CIART
 Chen_acrophases[1,1] = "CIART"

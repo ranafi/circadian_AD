@@ -57,7 +57,7 @@ plot_df = merge(cell_cts, cyc_pred, by.x = "projid", by.y = "ID")
 plot_df = plot_df %>% mutate(logRatio35 = log(Exc.3/Exc.5))
 
 p1 = ggplot(plot_df)+
-  geom_point(aes(x = Phase, y = logRatio35), size = 2, alpha =0.6, color = "blue")+
+  geom_point(aes(x = Phase, y = logRatio35), size = 2, alpha =0.6, color = "#0091ff")+
   theme_minimal()+
   xlab("CYCLOPS Predicted Phase")+
   ylab("Log(#Exc.3 / #Exc.5)")+
@@ -76,4 +76,34 @@ print(p1)
 
 ```{r}
 ggsave("~/Desktop/Exc3_5_ratio_rhythmic.pdf", plot = p1, width = 5, height = 4, units = "in")
+```
+
+### Compare the ratios without cyclops ordering:
+
+```{r}
+
+keep = which(is.finite(log(cell_cts$Exc.3)) & is.finite(log(cell_cts$Exc.5)))
+cell_cts_finite = cell_cts[keep,]
+r = round(cor((cell_cts_finite$Exc.3), (cell_cts_finite$Exc.5)),2)
+
+p2 = ggplot(cell_cts)+
+  geom_point(aes(x = (Exc.3), y = (Exc.5)), size = 2, alpha =0.6, color = "#0091ff")+
+  theme_minimal()+
+  xlab("# Exc.3 neurons")+
+  ylab("# Exc.5 neurons")+
+   theme(
+      plot.title = element_text(size = 12),      # Title font size
+      axis.title = element_text(size = 14),     # Axis title font size
+      axis.text = element_text(size = 14),      # Axis text font size
+      legend.text = element_text(size = 12),    # Legend text font size
+      legend.title = element_text(size = 12)    # Legend title font size
+)+
+  ggtitle(paste("Ratio Exc.3:Exc.5 neurons, cor:",r ))
+
+```
+
+Save pdf
+
+```{r}
+ggsave("~/Desktop/Exc3_5_ratio.pdf", plot = p2, width = 5, height = 5, units = "in")
 ```

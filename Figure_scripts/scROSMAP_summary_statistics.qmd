@@ -1,0 +1,29 @@
+---
+title: "scROSMAP Summary Stats"
+format: html
+editor: visual
+---
+
+```{r}
+library(tidyverse)
+rosmap_meta = read_csv("../ROSMAP_metadata/cleaned_rosmapmeta_n409.csv", show_col_types = F)
+```
+
+```{r}
+subs_by_cond = rosmap_meta %>%
+  group_by(cond_cogdx)%>%
+  summarise(n = n(),median_age_at_death = median(age_death_numeric), mad_age_death = mad(age_death_numeric), mean_age_death_numeric = mean(age_death_numeric, na.rm = T), std_age_death_numeric = sd(age_death_numeric, na.rm = T),median_pmi = median(pmi, na.rm = T), mad_pmi = mad(pmi, na.rm = T), mean_pmi = mean(pmi, na.rm = T), sd_pmi = sd(pmi, na.rm = T), prop_male = sum(msex) / n, prop_ROS = sum(Study == "ROS")/ n, median_braaksc = median(braaksc))
+
+```
+
+```{r}
+all_subs = rosmap_meta %>%
+  summarise(n = n(),median_age_at_death = median(age_death_numeric), mad_age_death = mad(age_death_numeric), mean_age_death_numeric = mean(age_death_numeric, na.rm = T), std_age_death_numeric = sd(age_death_numeric, na.rm = T),median_pmi = median(pmi, na.rm = T), mad_pmi = mad(pmi, na.rm = T), mean_pmi = mean(pmi, na.rm = T), sd_pmi = sd(pmi, na.rm = T), prop_male = sum(msex) / n, prop_ROS = sum(Study == "ROS")/ n, median_braaksc = median(braaksc))
+all_subs$cond_cogdx = NaN
+```
+
+```{r}
+summary = bind_rows(subs_by_cond, all_subs)
+summary$cond_cogdx[3] = "All"
+summary
+```
