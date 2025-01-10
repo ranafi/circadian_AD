@@ -1,0 +1,108 @@
+---
+title: "CHIRAL_phases"
+format: html
+editor: visual
+---
+
+## Load libs
+
+```{r}
+require(CHIRAL)
+require(tidyverse)
+set.seed(42)
+```
+
+Run CHIRAL
+
+```{r}
+tmm = read_csv("../normed_counts/ExcSubtypes35_FiltByExprDefault_TMM.csv", show_col_types = F)
+condition = tmm[1,]
+tmm = tmm[-c(1:6),]
+gene_names = tmm[,1] %>% unname %>% unlist
+tmm_num = apply(tmm[,-1], 2, as.numeric)
+tmm_logged = log(tmm_num+1)
+rownames(tmm_logged) = gene_names
+
+seed_genes = c("DBP", "TEF", "ZNF580", "GFOD1", "CASTOR2", "ETV5", "FMNL1", 
+               "MAMLD1", "TM7SF2", "FPGS", "SYNJ2", "HLF", "KBTBD2", "MPP2",
+               "USP2", "CC2D1B", "GALNT9", "GSTT2B", "NR1D1", "SRSF5", "ZMAT3", "ARNTL", "FAM3A", "FOSL2", "HUNK", "MORN1", "NEXN", "SPHK2", "TRIM9","ENC1", "GUF1", "PER2", "CRY1", "MRAS", "SFPQ", "ARRDC1", "CFAP46",
+               "DNAJB1", "MKKS", "SARS2", "SEC14L1", "SETD4", "SLC6A6", "SPATA7","TFR2", "PER1", "POR", "SLC16A1", "PER3", "NPAS2", "TSC22D3",
+               "BHLHE41", "NR1D2", "LEO1", "STK35", "GRAMD4", "COQ10B", "DTX4", "PDZRN3", "DUSP11", "OPRL1", "LRRC39", "TRIM24", "RARA", "LDB1",
+               "BHLHE40", "RSPO2", "TRAF5", "ANKRD12")
+Exc_neurons_CHIRAL = CHIRAL(tmm_logged, clockgenes = seed_genes)
+
+out = data.frame(ID = colnames(tmm_logged), Phase = Exc_neurons_CHIRAL$phi, Covariate_D = unlist(condition)[-1])
+
+```
+
+Compare Results to CYCLOPS ordering
+
+```{r}
+cyc_pred = read_csv("../Cyclops_ordering/Fits/Fit_Output_2024-11-25T13_12_00.csv", show_col_types = F)
+
+library(NMOF)
+cosine_distance <- function(xs, ys) {
+  1 - cos(xs - ys)
+}
+
+gridfunc = function(param, true_phases, pred_phases){
+  shift_from_original = param[1]
+  mean(cosine_distance(true_phases, (pred_phases + shift_from_original)%%(2*pi))^2)
+}
+
+find_best_forward_backward_alignment_grid_search <- function(l1, l2) {
+  true_phases = l1[!is.na(l2)]
+  pred_phases = l2[!is.na(l2)]
+  
+  forward_search = gridSearch(gridfunc, levels = list(x =  seq(-2*pi, 2*pi, by = .05)), method = 'multicore', mc.control = list(mc.cores = 10), true_phases = true_phases, pred_phases = pred_phases)
+  forward_min = forward_search$minfun
+  forward_shift = forward_search$minlevel
+  forward_list_of_phases = (pred_phases+forward_shift)%%(2*pi)
+  
+  pred_phases = (-l2[!is.na(l2)])%%(2*pi)
+  
+  reverse_search = gridSearch(gridfunc, levels = list(x =  seq(-2*pi, 2*pi, by = .05)), method = 'multicore', mc.control = list(mc.cores = 10), true_phases = true_phases, pred_phases = pred_phases)
+  reverse_min = reverse_search$minfun
+  reverse_shift = reverse_search$minlevel
+  reverse_list_of_phases = (pred_phases+reverse_shift)%%(2*pi)
+  
+  if(forward_min < reverse_min) {
+    return(forward_list_of_phases)
+  }
+  return(reverse_list_of_phases)
+}
+
+
+df = merge(cyc_pred, out, by = "ID", suffixes = c("_cyc", "_chi"))
+
+df$shifted_phase_chiral = find_best_forward_backward_alignment_grid_search(df$Phase_cyc, df$Phase_chi)
+
+library(circular)
+source("~/Box Sync/Henry_stuff/AD_project/scROSMAP/scrosmap_newAtlas/scROSMAP_project/Analysis_scripts/downstream_helpers/CircularCorrelations.R")
+Fischer_Circular_CorrelationMeasures(df$Phase_cyc, df$shifted_phase_chiral)
+Jammalamadaka_Circular_CorrelationMeasures(df$Phase_cyc, df$shifted_phase_chiral)
+cor.circular(df$Phase_cyc, df$shifted_phase_chiral)
+
+out = ggplot(df, aes(x = Phase_cyc, y = shifted_phase_chiral) )+
+  geom_point(shape = 16, size = 2, alpha = .7,color = "#0091ff")+
+  xlim(0, 2*pi)+
+  ylim(0, 2*pi)+
+  ylab("Best aligned CHIRAL phases")+
+  xlab("CYCLOPS phases")+
+  scale_x_continuous(breaks = seq(0, 2 * pi, by = pi/2),
+                     labels = c("0", expression(pi/2), expression(pi),                           expression(3*pi/2), expression(2*pi))) +
+  scale_y_continuous(breaks = seq(0, 2 * pi, by = pi/2),
+                     labels = c("0", expression(pi/2), expression(pi),                           expression(3*pi/2), expression(2*pi)))+
+  theme_minimal()+
+  theme(
+    axis.text.x = element_text(size = 14),    # Increase x-axis text size
+    axis.text.y = element_text(size = 14),    # Increase y-axis text size
+    axis.title.x = element_text(size = 16),   # Increase x-axis title size
+    axis.title.y = element_text(size = 16),   # Increase y-axis title size
+    legend.title = element_text(size = 12)    # Increase legend title size
+  )
+
+
+ggsave("~/Desktop/CYCLOPS_vs_CHIRAL.pdf", plot = out, width = 5, height = 5, units = "in")
+
+```
