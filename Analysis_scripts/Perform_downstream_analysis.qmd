@@ -47,10 +47,10 @@ Select the CYCLOPS ordering path and path to data file and path to EdgeR differe
 path_to_cyclops_ordering = "../Cyclops_ordering/"
 
 #path to normalized counts
-path_to_tmm_file = "../normed_counts/ExcSubtypes35_FiltByExprDefault_TMM.csv"
+path_to_tmm_file = "../normed_counts/Exc_all_FiltByExprDefault_TMM.csv"
 
 # optional path to file containing differential expression results
-edgeR_de_filename = "../edgeR_diff_expression/Exc3_5/Exc3_5_filtByExpr_edgeR_DE_QLFTest.csv"
+edgeR_de_filename = "../edgeR_diff_expression/Exc_All/Exc_all_filtByExpr_edgeR_DE_QLFTest.csv"
 
 path_to_rosmap_clin = "../ROSMAP_metadata/cleaned_rosmapmeta_n409.csv"
 metabolon_filename = "../metabolic_data/ROSMAP_Metabolon_HD4_Brain514_assay_data.csv"
@@ -117,6 +117,8 @@ GWAS_genes = c("ABCA1", "ABCA7", "ABI3", "ACE", "ADAM17", "ADAMTS1", "ANK3", "AN
 "SNX1", "SORL1", "SORT1", "SPDYE3", "SPI1", "SPPL2A", "TMEM106B", "TNIP1", "TPCN1", "TREM2", "TREML2", "TSPAN14", "TSPOAP1",
 "UMAD1", "UNC5CL", "USP6NL", "WDR12", "WDR81", "WNT3")
 
+GWAS_genes = c(c("APOE", "PSEN1", "PSEN2"), GWAS_genes)
+
 #which of those genes are cycling in CTL?
 GWAS_cycling_CTL_df = read_csv(paste0(path_to_cyclops_ordering,"downstream_output/cosinor_results_CTL.csv"), show_col_types = F) %>% filter(Gene_Symbols %in% GWAS_genes, BHQ < isCyclingBHQCutoff)
 
@@ -125,29 +127,24 @@ GWAS_cycling_CTL = GWAS_cycling_CTL_df %>% dplyr::select(Gene_Symbols) %>% unnam
 #which of those genes are cycling in AD?
 GWAS_cycling_AD_df = read_csv(paste0(path_to_cyclops_ordering, "downstream_output/cosinor_results_AD.csv"), show_col_types = F) %>% filter(Gene_Symbols %in% GWAS_genes, BHQ < isCyclingBHQCutoff)
 
-GWAS_cycling_AD = GWAS_cycling_AD_df%>% dplyr::select(Gene_Symbols) %>% unname %>% unlist
 
-#Take union of those sets:
-GWAS_genes_cycling_either = union(GWAS_cycling_CTL, GWAS_cycling_AD)
+GWAS_DR_df = read_csv(paste0(path_to_cyclops_ordering, "downstream_output/diff_rhythms_CyclingBHQ1AmpRatio20.csv"), show_col_types = F) %>% filter(Gene_Symbols %in% GWAS_genes) %>% dplyr::select(!c(BHQ, Bonf))
 
-tmm = read_csv(path_to_tmm_file, show_col_types = FALSE)  #read expression data, unordered
-#Get CYCLOPS phases for subjects:
-cyc_pred_file = list.files(path = paste0(path_to_cyclops_ordering, "/Fits/"), pattern = '*Fit_Output_*')
-cyc_pred = read_csv(paste(path_to_cyclops_ordering, "Fits", cyc_pred_file[1], sep = '/'), show_col_types = FALSE)
+GWAS_DR_df$BHQ = p.adjust(GWAS_DR_df$p_val, method = "BH")
 
-#perform diff_cycling analysis
-pb <- progress_bar$new(total = length(GWAS_genes_cycling_either))
-if(length(GWAS_genes_cycling_either) != 0){
-GWAS_diff_rhythms_results = diff_rhyth(cyc_pred, tmm, GWAS_genes_cycling_either, useBatch = useBatch, pb = pb, percentile = percentile)
 
 BHQCutoff_str = str_extract(as.character(isCyclingBHQCutoff), "(?<=\\.)\\d+")
 
-diff_mesor_GWAS = read_csv(paste0(path_to_cyclops_ordering, "/downstream_output/differential_mesor_all_genes.csv"), show_col_types = F) %>% filter(Gene_Symbols %in% GWAS_genes) #%>% dplyr::select(!c(BHQ, Bonf))
+diff_mesor_GWAS = read_csv(paste0(path_to_cyclops_ordering, "/downstream_output/differential_mesor_all_genes.csv"), show_col_types = F) %>% filter(Gene_Symbols %in% GWAS_genes) %>% dplyr::select(!c(BHQ, Bonf))
 
-write_xlsx(list(GWAS_CTL_cycling = GWAS_cycling_CTL_df, GWAS_AD_cycling = GWAS_cycling_AD_df, GWAS_diff_rhyth = GWAS_diff_rhythms_results, GWAS_diff_mesor = diff_mesor_GWAS), path = paste0(path_to_cyclops_ordering, "/downstream_output/AD_GWAS_diff_rhythms_CyclingBHQ",BHQCutoff_str,".xlsx"))
+diff_mesor_GWAS$BHQ = p.adjust(diff_mesor_GWAS$p_mesor, method = "BH")
 
-GWAS_diff_rhythms_results
-}
+diff_expr_GWAS = read_csv(edgeR_de_filename, show_col_types = F) %>% filter(`...1` %in% GWAS_genes) %>% dplyr::select(!FDR)
+
+diff_expr_GWAS$BHQ = p.adjust(diff_expr_GWAS$PValue, method = "BH")
+
+write_xlsx(list(GWAS_CTL_cycling = GWAS_cycling_CTL_df, GWAS_AD_cycling = GWAS_cycling_AD_df, GWAS_diff_rhyth = GWAS_DR_df, GWAS_diff_mesor = diff_mesor_GWAS, GWAS_diff_expr = diff_expr_GWAS), path = paste0(path_to_cyclops_ordering, "/downstream_output/AD_GWAS_diff_rhythms_CyclingBHQ",BHQCutoff_str,".xlsx"))
+
 ```
 
 ### Plotting
