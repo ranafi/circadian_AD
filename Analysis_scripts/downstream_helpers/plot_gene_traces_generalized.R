@@ -105,9 +105,10 @@ plot_gene_trace = function(cyc_pred, tmm, seedlist,  useBatch = F,
       my_df[,seedlist[i]] =  gexp1
       y_sd = sd(my_df[,seedlist[i]])
       y_mean = mean(my_df[,seedlist[i]])
-  
-      # ylim_max = max(my_df[,seedlist[i]])
-      # ylim_min = min(my_df[,seedlist[i]])
+      y_min = min(my_df[,seedlist[i]])
+      y_max = max(my_df[,seedlist[i]])
+     
+      
       df_AD = my_df %>% dplyr::filter(Cond_D == "cond_1")
       df_AD$fitted_values = fitted_ad
       df_CTL = my_df %>% dplyr::filter(Cond_D == "cond_0")
@@ -116,7 +117,7 @@ plot_gene_trace = function(cyc_pred, tmm, seedlist,  useBatch = F,
         
         plot1 = ggplot(df_CTL , aes(x = Phase , y = df_CTL[,seedlist[i]])) +
           # ylim(ylim_min, ylim_max)+
-          ylim(max(0,y_mean - 3 * y_sd), y_mean + 3 * y_sd)+
+          ylim(max(0,y_min, y_mean - 3 * y_sd), min(y_max, y_mean + 3 * y_sd))+
           geom_point(aes(color = "CTL")) +
           geom_line(mapping=aes(x=Phase, y=fitted_values, color = "CTL"), linetype = "solid",linewidth = 2) +
           labs(title = paste0(seedlist[i], " in CTL"), x = "Circadian Phase", y = "Expression")+
@@ -137,7 +138,7 @@ plot_gene_trace = function(cyc_pred, tmm, seedlist,  useBatch = F,
        
         plot2 = ggplot(df_AD , aes(x = Phase , y = df_AD[,seedlist[i]])) +
           # ylim(ylim_min, ylim_max)+
-          ylim(max(0,y_mean - 3 * y_sd), y_mean + 3 * y_sd)+
+          ylim(max(0,y_min, y_mean - 3 * y_sd), min(y_max, y_mean + 3 * y_sd))+
           geom_point(aes(color = "AD")) +
           geom_line(mapping=aes(x=Phase, y=fitted_values, color = "AD"), linetype = "solid",linewidth = 2) +
           labs(title = paste0(seedlist[i], " in AD"), x = "Circadian Phase", y = "Expression")+
@@ -166,7 +167,7 @@ plot_gene_trace = function(cyc_pred, tmm, seedlist,  useBatch = F,
           scale_x_continuous(breaks = seq(0, 2 * pi, by = pi/2),
                              labels = c("0", expression(pi/2), expression(pi),
                                         expression(3*pi/2), expression(2*pi)))+
-          ylim(max(0,y_mean - 3 * y_sd), y_mean + 3 * y_sd)+
+          ylim(max(0,y_min, y_mean - 3 * y_sd), min(y_max, y_mean + 3 * y_sd))+
           theme(
             plot.title = element_text(size = 14),      # Title font size
             axis.title = element_text(size = 14),     # Axis title font size

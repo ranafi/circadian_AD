@@ -66,12 +66,19 @@ function plot_clock_face(plotname, GOI,GOI_Acrophases, GOI_Ideal, Ideal_Acrophas
     plot_ideals = mod.(-(Ideal_Acrophases .- π/2), 2π)
     # cmap = ColorMap("mycmap",[RGB(1,0,0),RGB(.5,.5,.5),RGB(0,1,0)])
     PyPlot.set_cmap("RdYlBu_r")
-    minus_log_sig =  -log.(signif_Values)
-    sc = PyPlot.scatter(plot_acrophases, ones(length(plot_acrophases)), alpha = 0.8, c =minus_log_sig, s = amp_ratio*1e3, label = "Estimated Acrophases")
-    PyPlot.scatter(plot_ideals, ones(length(plot_acrophases)) .* 0.5, alpha = 0.8, s = 75, c = "g", label = "Ideal Acrophases")
-    legend( loc = (0.45, -0.1875))
+    minus_log_sig =  -log10.(signif_Values)
+    sc = PyPlot.scatter(plot_acrophases, ones(length(plot_acrophases)), alpha = 0.8, c = minus_log_sig, s = amp_ratio * 1e3, label = "")
+    PyPlot.scatter(plot_ideals, ones(length(plot_acrophases)) .* 0.5, alpha = 0.8, s = 75, c = "g", label = "")
     clim(minimum(minus_log_sig), maximum(minus_log_sig))
-    colorbar( orientation = "horizontal", shrink = .8, label = "-log(BHQ value)")
+    colorbar(orientation = "horizontal", shrink = .8, label = "-Log(BHQ value)")
+
+    # Add a legend for the size of the dots
+    for ratio in [0.1, 0.3, .5]
+        PyPlot.scatter([], [], s = ratio * 1e3, edgecolors = "none", label = "$ratio", c = "k")
+    end
+    legend(loc = "lower left")
+    # legend(loc = (0.45, -0.1875))
+
 
     significant_acrophase_mean = Circular_Mean(plot_acrophases)
     range_upper, range_lower = mod.(±(significant_acrophase_mean, π/2), 2π)

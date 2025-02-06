@@ -152,7 +152,8 @@ supp_table %>% select(grep("AD_genes|_dr$", colnames(supp_table))) %>% View
 Exc only
 
 ```{r}
-supp_table %>% select(grep("AD_genes|^Exc", colnames(supp_table))) %>% View
+exc_neurons_only = supp_table %>% select(grep("AD_genes|^Exc", colnames(supp_table)))
+write.table(exc_neurons_only, "~/Desktop/AD_GWAS_exc.csv",sep = ',', row.names = F)
 ```
 
 Write out Excel
@@ -162,23 +163,32 @@ colnames(supp_table) = c("AD GWAS Genes",
                          "Excitatory Neurons cycling CTL",
                          "Excitatory Neurons cycling AD",
                          "Excitatory Neurons diff. rhyth.",
-                         "Excitatory Neurons diff. mesor",
+                         "Excitatory Neurons diff. MESOR",
                          "Excitatory Neurons diff. expr.",
                          "Inhibitory Neurons cycling CTL",
                          "Inhibitory Neurons cycling AD",
                          "Inhibitory Neurons diff. rhyth.",
-                         "Inhibitory Neurons diff. mesor",
+                         "Inhibitory Neurons diff. MESOR",
                          "Inhibitory Neurons diff. expr",
                          "Astrocytes cycling CTL",
                          "Astrocytes cycling AD",
                          "Astrocytes diff. rhyth.",
-                         "Astrocytes diff. mesor",
+                         "Astrocytes diff. MESOR",
                          "Astrocytes diff. expr.",
                          "Microglia cycling CTL",
                          "Microglia cycling AD",
                          "Microglia diff. rhyth.",
-                         "Microglia diff. mesor",
+                         "Microglia diff. MESOR",
                          "Microglia diff. expr.")
+
+x = list(
+  `Excitatory Neurons` = supp_table %>% select(grep("^AD|^Excitatory", colnames(supp_table))),
+  `Inhibitory Neurons` = supp_table %>% select(grep("^AD|^Inhibitory", colnames(supp_table))),
+  `Astrocytes` = supp_table %>% select(grep("^AD|^Astrocytes", colnames(supp_table))),
+  `Microglia` = supp_table %>% select(grep("^AD|^Microglia", colnames(supp_table)))
+)
+
 library(writexl)
-write_xlsx(supp_table, paste0("~/Desktop/Cycling_GWAS_AR",AR_str,"BHQ", BHQ_str, ".xlsx"), col_names = T)
+# write_xlsx(supp_table, paste0("~/Desktop/Cycling_GWAS_AR",AR_str,"BHQ", BHQ_str, ".xlsx"), col_names = T)
+write_xlsx(x, paste0("~/Desktop/Cycling_GWAS_AR",AR_str,"BHQ", BHQ_str, ".xlsx"), col_names = T)
 ```
