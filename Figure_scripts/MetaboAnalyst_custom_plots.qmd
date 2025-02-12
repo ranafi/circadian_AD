@@ -38,7 +38,7 @@ p1 = ggplot(pathway_res_CTL, aes(x= Impact, y = `-log10(p)`, label =str_wrap(`..
     axis.title.y = element_text(size = 16),   # Increase y-axis title size
     legend.title = element_text(size = 12)    # Increase legend title size
   )+
-  ylab("-Log10(p val)")
+  ylab("-Log(p val)")
 ggsave("~/Desktop/Cycling_CTL_BHQ1_jointPathwayMataboanalyst.pdf", plot = p1, width = 5, height = 5, units = "in")
 ```
 
@@ -54,7 +54,7 @@ p2 = ggplot(pathway_res_AD, aes(x= Impact, y = `-log10(p)`, label =str_wrap(`...
     axis.title.y = element_text(size = 16),   # Increase y-axis title size
     legend.title = element_text(size = 12)    # Increase legend title size
   )+
-  ylab("-Log10(p val)")
+  ylab("-Log(p val)")
 ggsave("~/Desktop/Cycling_AD_BHQ1_jointPathwayMataboanalyst.pdf", plot = p2, width = 5, height = 5, units = "in")
 ```
 
@@ -70,7 +70,7 @@ p3 = ggplot(pathway_res_Diff_Rhyth, aes(x= Impact, y = `-log10(p)`, label =str_w
     axis.title.y = element_text(size = 16),   # Increase y-axis title size
     legend.title = element_text(size = 12)    # Increase legend title size
   )+
-  ylab("-Log10(p val)")
+  ylab("-Log(p val)")
 
 ggsave("~/Desktop/DR_cycling_p05_jointPathwayMataboanalyst.pdf", plot = p3, width = 5, height = 5, units = "in")
 ```
@@ -87,7 +87,7 @@ p4 = ggplot(pathway_res_Diff_Rhyth_Gain_Rhythm, aes(x= Impact, y = `-log10(p)`, 
     axis.title.y = element_text(size = 16),   # Increase y-axis title size
     legend.title = element_text(size = 12)    # Increase legend title size
   )+
-  ylab("-Log10(p val)")
+  ylab("-Log(p val)")
 ```
 
 ```{r}
@@ -102,7 +102,7 @@ p5 = ggplot(pathway_res_Diff_Rhyth_Lose_Rhythm, aes(x= Impact, y = `-log10(p)`, 
     axis.title.y = element_text(size = 16),   # Increase y-axis title size
     legend.title = element_text(size = 12)    # Increase legend title size
   )+
-  ylab("-Log10(p val)")
+  ylab("-Log(p val)")
 ggsave("~/Desktop/DR_cycling_LOSEAMP_p05_jointPathwayMataboanalyst.pdf", plot = p5, width = 5, height = 5, units = "in")
 ```
 

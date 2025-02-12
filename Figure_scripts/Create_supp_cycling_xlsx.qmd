@@ -1,0 +1,67 @@
+---
+title: "Untitled"
+format: html
+editor: visual
+---
+
+## Import libs
+
+```{r}
+library(readr)
+library(dplyr)
+library(openxlsx)
+
+merge_csvs_to_xlsx <- function(cell_type, rel_path, de_path, output_xlsx) {
+  setwd(rel_path)
+  
+  ctl_cyclers = read_csv("cosinor_results_CTL.csv", show_col_types = F) %>% select(Gene_Symbols, acrophase, amplitude, amp_ratio, BHQ) %>% rename(cycling_BHQ = BHQ)
+  
+  ad_cyclers = read_csv("cosinor_results_AD.csv", show_col_types = F) %>% select(Gene_Symbols, acrophase, amplitude, amp_ratio, BHQ) %>% rename(cycling_BHQ = BHQ)
+  
+  diff_rhythms = read_csv("diff_rhythms_CyclingBHQ1AmpRatio20.csv", show_col_types = F) %>% select(Gene_Symbols, BHQ, Log_AD_CTL_ampRatio) %>% rename(diff_rhyth_BHQ = BHQ)
+  
+  diff_mesor = read_csv("differential_mesor_all_genes.csv", show_col_types = F) %>% select(Gene_Symbols, mesor_CTL, mesor_AD, BHQ) %>% rename(diff_mesor_BHQ = BHQ)
+  
+  diff_exp = read_csv(de_path, show_col_types = F) %>% select(`...1`, logFC, FDR) %>% rename(Gene_Symbols = `...1`, diff_exp_logFC = logFC, diff_exp_BHQ = FDR)
+  
+  merged_data = full_join(ctl_cyclers, ad_cyclers, by = "Gene_Symbols", suffix = c("_CTL", "_AD")) %>% 
+    full_join(diff_rhythms, by = "Gene_Symbols")%>%
+    full_join(diff_mesor, by = "Gene_Symbols")%>%
+    full_join(diff_exp, by = "Gene_Symbols")
+  
+  wb <- openxlsx::createWorkbook()
+  
+  
+  # Add the merged data as a new sheet
+  addWorksheet(wb, cell_type)
+  writeData(wb, cell_type, merged_data)
+
+  # Save the workbook
+  saveWorkbook(wb, output_xlsx, overwrite = TRUE)
+}
+
+```
+
+### Excitatory All
+
+```{r}
+merge_csvs_to_xlsx("Excitatory Neurons", "../Cyclops_ordering/downstream_output_Exc_all/","../../edgeR_diff_expression/Exc_All/Exc_all_filtByExpr_edgeR_DE_QLFTest.csv", "~/Desktop/Exc_Neurons.xlsx" )
+```
+
+### Inhibitory All
+
+```{r}
+merge_csvs_to_xlsx("Inhibitory Neurons", "../Cyclops_ordering/downstream_output_Inhib_all/","../../edgeR_diff_expression/Inhib_All/Inhib_all_filtByExpr_edgeR_DE_QLFTest.csv", "~/Desktop/Inh_Neurons.xlsx" )
+```
+
+### Astrocytes All
+
+```{r}
+merge_csvs_to_xlsx("Asctrocytes", "../Cyclops_ordering/downstream_output_Ast_all/", "../../edgeR_diff_expression/Ast_All/Ast_all_filtByExpr_edgeR_DE_QLFTest.csv", "~/Desktop/Ast.xlsx")
+```
+
+Microglia All
+
+```{r}
+merge_csvs_to_xlsx("Microglia", "../Cyclops_ordering/downstream_output_Mglia_all/", "../../edgeR_diff_expression/Mglia_All/Mglia_all_filtByExpr_edgeR_DE_QLFTest.csv", "~/Desktop/Mglia.xlsx")
+```
