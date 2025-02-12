@@ -20,6 +20,8 @@ pathway_res_Diff_Rhyth = read_csv("../Cyclops_ordering/metabolon/MetaboAnalyst/D
 pathway_res_Diff_Rhyth_Lose_Rhythm = read_csv("../Cyclops_ordering/metabolon/MetaboAnalyst/DR_p05_LOSEAMP_PseudobulkAR20LoseAmpGenes_jointAnalysisDefaultSettings/MetaboAnalyst_result_pathway.csv", show_col_types = F)
 
 pathway_res_Diff_Rhyth_Gain_Rhythm = read_csv("../Cyclops_ordering/metabolon/MetaboAnalyst/DR_p05_GAINAMP_PseudobulkAR20GainAmpGenes_jointAnalysisDefaultSettings/MetaboAnalyst_result_pathway.csv")
+
+pathway_res_diff_mesor = read_csv("../Cyclops_ordering/metabolon/MetaboAnalyst/DM_BHQ1_PseudobulkBHQ1DiffMesorGenes_jointAnalysisDefaultSettings/MetaboAnalyst_result_pathway.csv")
 ```
 
 Make the Plots:
@@ -102,4 +104,20 @@ p5 = ggplot(pathway_res_Diff_Rhyth_Lose_Rhythm, aes(x= Impact, y = `-log10(p)`, 
   )+
   ylab("-Log10(p val)")
 ggsave("~/Desktop/DR_cycling_LOSEAMP_p05_jointPathwayMataboanalyst.pdf", plot = p5, width = 5, height = 5, units = "in")
+```
+
+```{r}
+p6 = ggplot(pathway_res_diff_mesor, aes(x= Impact, y = `-log10(p)`, label =str_wrap(`...1`, 25)))+
+  geom_point(size = 5, color = "purple", alpha = 0.7)+
+  ggrepel::geom_text_repel(max.overlaps = 5)+
+   theme_minimal()+    
+  theme(
+    axis.text.x = element_text(size = 14),    # Increase x-axis text size
+    axis.text.y = element_text(size = 14),    # Increase y-axis text size
+    axis.title.x = element_text(size = 16),   # Increase x-axis title size
+    axis.title.y = element_text(size = 16),   # Increase y-axis title size
+    legend.title = element_text(size = 12)    # Increase legend title size
+  )+
+  ylab("-Log(p val)")
+ggsave("~/Desktop/DM_BHQ1_jointPathwayMataboanalyst.pdf", plot = p6, width = 5, height = 5, units = "in")
 ```

@@ -1,0 +1,252 @@
+---
+title: "Ribo_stepwise"
+format: html
+editor: visual
+---
+
+```{r}
+library(tidyverse)
+library(openxlsx)
+library(ordPens)
+```
+
+### Define functions:
+
+```{r}
+format_df = function(data){
+  df = pivot_longer(data, everything(), names_to = c("grp"), values_to = c("exp")) %>% arrange(desc(exp)) %>% mutate(group_numeric = case_when(
+    grp == "WT+LD" ~ 1,
+    grp == "APP+LD" ~ 2,
+    grp == "APP+CJL" ~ 3,
+    TRUE ~ NA_real_ # Set NA for any other values
+  ),.keep = "all" ) %>% drop_na
+  return(df)
+}
+
+```
+
+## Western blots
+
+#### RPS6 b-tubulin:
+
+```{r}
+RPS6 = openxlsx::read.xlsx("Aged_APP_CJL_riboproteins_WB.xlsx", sheet = "RPS6 b-tubulin")
+df_rps6 = format_df(RPS6)
+
+rps6_model = lm(exp ~ group_numeric, data = df_rps6)
+summary(rps6_model)
+
+cor.test(df_rps6$group_numeric, df_rps6$exp, method = "kendall")
+
+df_rps6$grp <- ordered(df_rps6$grp,
+                         levels = c("WT+LD", "APP+LD", "APP+CJL"))
+
+kruskal.test(exp ~ grp, data = df_rps6)
+
+pairwise.wilcox.test(df_rps6$exp, df_rps6$grp,
+                 p.adjust.method = "BH")
+
+ordAOV(df_rps6$group_numeric, df_rps6$exp, type = "RLRT", nsim = 1000000)
+```
+
+#### RPL7a
+
+```{r}
+RPL7a = openxlsx::read.xlsx("Aged_APP_CJL_riboproteins_WB.xlsx", sheet = "RPL7a b-tubulin")
+df_rpl7a = format_df(RPL7a)
+
+rpl7a_model = lm(exp ~ group_numeric, data = df_rpl7a)
+summary(rpl7a_model)
+
+cor.test(df_rpl7a$group_numeric, df_rpl7a$exp, method = "kendall")
+
+df_rpl7a$grp <- ordered(df_rpl7a$grp,
+                         levels = c("WT+LD", "APP+LD", "APP+CJL"))
+
+kruskal.test(exp ~ grp, data = df_rpl7a) #Not significant
+
+ordAOV(df_rpl7a$group_numeric, df_rpl7a$exp, type = "RLRT", nsim = 1000000)
+```
+
+#### RPS27a
+
+```{r}
+RPS27a = openxlsx::read.xlsx("Aged_APP_CJL_riboproteins_WB.xlsx", sheet = "RPS27a b-tubulin")
+
+df_rps27a = format_df(RPS27a)
+
+rps27a_model = lm(exp ~ group_numeric, data = df_rps27a)
+summary(rps27a_model)
+
+cor.test(df_rps27a$group_numeric, df_rps27a$exp, method = "kendall")
+
+df_rps27a$grp <- ordered(df_rps27a$grp,
+                         levels = c("WT+LD", "APP+LD", "APP+CJL"))
+
+kruskal.test(exp ~ grp, data = df_rps27a) #p = 0.064
+
+pairwise.wilcox.test(df_rps27a$exp, df_rps27a$grp,
+                 p.adjust.method = "BH")
+
+ordAOV(df_rps27a$group_numeric, df_rps27a$exp, type = "RLRT", nsim = 1000000)
+```
+
+#### RPL10a
+
+```{r}
+RPL10a = openxlsx::read.xlsx("Aged_APP_CJL_riboproteins_WB.xlsx", sheet = "RPL10a b-tubulin")
+
+df_rpl10a = format_df(RPL10a)
+
+rpl10a_model = lm(exp ~ group_numeric, data = df_rpl10a)
+summary(rpl10a_model)
+
+cor.test(df_rpl10a$group_numeric, df_rpl10a$exp, method = "kendall")
+
+df_rpl10a$grp <- ordered(df_rpl10a$grp,
+                         levels = c("WT+LD", "APP+LD", "APP+CJL"))
+
+kruskal.test(exp ~ grp, data = df_rpl10a) #p = 0.03602
+
+pairwise.wilcox.test(df_rpl10a$exp, df_rpl10a$grp,
+                 p.adjust.method = "BH")
+
+ordAOV(df_rpl10a$group_numeric, df_rpl10a$exp, type = "RLRT", nsim = 1000000)
+```
+
+## Imaging Data RPS6
+
+#### ⭐dentate gyrus **DAPI normed**
+
+```{r}
+dapi_dg = openxlsx::read.xlsx("Aged_BO_CJL_RPS6.xlsx", sheet = "RPS6 DAPI_DG")
+
+df_dapi_dg = format_df(dapi_dg)
+
+dapi_dg_model = lm(exp ~ group_numeric, data = df_dapi_dg)
+summary(dapi_dg_model)
+
+cor.test(df_dapi_dg$group_numeric, df_dapi_dg$exp, method = "kendall")
+
+df_dapi_dg$grp <- ordered(df_dapi_dg$grp,
+                         levels = c("WT+LD", "APP+LD", "APP+CJL"))
+
+kruskal.test(exp ~ grp, data = df_dapi_dg) #p = 0.001704
+
+pairwise.wilcox.test(df_dapi_dg$exp, df_dapi_dg$grp,
+                 p.adjust.method = "BH")
+
+ordAOV(df_dapi_dg$group_numeric, df_dapi_dg$exp, type = "RLRT", nsim = 1000000)
+```
+
+#### plain dentate gyrus unnormed
+
+```{r}
+dg = openxlsx::read.xlsx("Aged_BO_CJL_RPS6.xlsx", sheet = "RPS6 DG")
+
+df_dg = format_df(dg)
+
+dg_model = lm(exp ~ group_numeric, data = df_dg)
+summary(dg_model)
+
+cor.test(df_dg$group_numeric, df_dg$exp, method = "kendall")
+
+df_dg$grp <- ordered(df_dg$grp,
+                         levels = c("WT+LD", "APP+LD", "APP+CJL"))
+
+kruskal.test(exp ~ grp, data = df_dg) #p = 0.06356
+
+pairwise.wilcox.test(df_dg$exp, df_dg$grp,
+                 p.adjust.method = "BH")
+
+ordAOV(df_dg$group_numeric, df_dg$exp, type = "RLRT", nsim = 1000000)
+```
+
+#### ⭐Cortex normed to DAPI
+
+```{r}
+ctx_dapi = openxlsx::read.xlsx("Aged_BO_CJL_RPS6.xlsx", sheet = "RPS6 DAPI_CTX")
+
+df_ctx_dapi = format_df(ctx_dapi)
+
+ctx_dapi_model = lm(exp ~ group_numeric, data = df_ctx_dapi)
+summary(ctx_dapi_model)
+
+cor.test(df_ctx_dapi$group_numeric, df_ctx_dapi$exp, method = "kendall")
+
+df_ctx_dapi$grp <- ordered(df_ctx_dapi$grp,
+                         levels = c("WT+LD", "APP+LD", "APP+CJL"))
+
+kruskal.test(exp ~ grp, data = df_ctx_dapi) #p = 0.00734
+
+pairwise.wilcox.test(df_ctx_dapi$exp, df_ctx_dapi$grp,
+                 p.adjust.method = "BH")
+
+ordAOV(df_ctx_dapi$group_numeric, df_ctx_dapi$exp, type = "RLRT", nsim = 1000000)
+```
+
+#### plain cortex unnormed
+
+```{r}
+ctx = openxlsx::read.xlsx("Aged_BO_CJL_RPS6.xlsx", sheet = "RPS6 CTX")
+ 
+df_ctx = format_df(ctx)
+
+ctx_model = lm(exp ~ group_numeric, data = df_ctx)
+summary(ctx_model)
+
+cor.test(df_ctx$group_numeric, df_ctx$exp, method = "kendall")
+
+df_ctx$grp <- ordered(df_ctx$grp,
+                         levels = c("WT+LD", "APP+LD", "APP+CJL"))
+
+kruskal.test(exp ~ grp, data = df_ctx) #p = 0.00745
+
+pairwise.wilcox.test(df_ctx$exp, df_ctx$grp,
+                 p.adjust.method = "BH")
+
+ordAOV(df_ctx$group_numeric, df_ctx$exp, type = "RLRT", nsim = 1000000)
+```
+
+## Polysome
+
+#### ⭐AUC Poly/Total
+
+```{r}
+poly_total = openxlsx::read.xlsx("Polysome.xlsx", sheet = "AUC poly over total")
+ 
+poly_total_df = format_df(poly_total)
+
+cor.test(poly_total_df$group_numeric, poly_total_df$exp, method = "kendall")
+
+poly_total_df$grp <- ordered(poly_total_df$grp,
+                         levels = c("WT+LD", "APP+LD", "APP+CJL"))
+
+kruskal.test(exp ~ grp, data = poly_total_df) #p = 0.09955
+
+pairwise.wilcox.test(poly_total_df$exp, poly_total_df$grp,
+                 p.adjust.method = "BH")
+
+ordAOV(poly_total_df$group_numeric, poly_total_df$exp, type = "RLRT", nsim = 1000000)
+
+```
+
+#### AUC Poly/ 80S
+
+```{r}
+poly_80s = openxlsx::read.xlsx("Polysome.xlsx", sheet = "AUC poly over 80S deconv")
+ 
+poly_80s_df = format_df(poly_80s)
+
+cor.test(poly_80s_df$group_numeric, poly_80s_df$exp, method = "kendall")
+
+poly_80s_df$grp <- ordered(poly_80s_df$grp,
+                         levels = c("WT+LD", "APP+LD", "APP+CJL"))
+
+kruskal.test(exp ~ grp, data = poly_80s_df) #p = 0.09955
+
+pairwise.wilcox.test(poly_80s_df$exp, poly_80s_df$grp,
+                 p.adjust.method = "BH")
+
+ordAOV(poly_80s_df$group_numeric, poly_80s_df$exp, type = "RLRT", nsim = 1000000)
+```

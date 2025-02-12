@@ -31,6 +31,8 @@ diff_cycling_BHQ = filter(diff_cycling, p_val < 0.05)
 gain_amp = read_csv("../Cyclops_ordering/metabolon/diff_rhythms_CyclingBHQ1.csv", show_col_types = F) %>% dplyr::filter( p_val < 0.05 & Log_AD_CTL_ampRatio > 0 )
 
 lose_amp = read_csv("../Cyclops_ordering/metabolon/diff_rhythms_CyclingBHQ1.csv", show_col_types = F) %>% dplyr::filter( p_val < 0.05 & Log_AD_CTL_ampRatio < 0 )
+
+diff_mesor =read_csv("../Cyclops_ordering/metabolon/all_metabolites_mesor_diffs.csv", show_col_types = F) %>% dplyr::filter( BHQ < 0.1)
 ```
 
 ### Merge with trans_dict
@@ -46,11 +48,14 @@ gain_amp_out = merge(gain_amp, trans_dict, by = "SHORT_NAME", by.y = "SHORT_NAME
 
 lose_amp_out = merge(lose_amp, trans_dict, by = "SHORT_NAME", by.y = "SHORT_NAME_Metabolon", suffixes = "_metaboAnalyst")
 
+diff_mesor_out = merge(diff_mesor, trans_dict, by = "SHORT_NAME", by.y = "SHORT_NAME_Metabolon", suffixes = "_metaboAnalyst")
+
 write.table(cycling_CTL, "../Cyclops_ordering/metabolon/MetaboAnalyst/Cycling_in_CTL_BHQ1.csv", sep = ',', row.names = F)
 write.table(cycling_AD, "../Cyclops_ordering/metabolon/MetaboAnalyst/Cycling_in_AD_BHQ1.csv", sep = ',', row.names = F)
 write.table(diff_cycling_out, "../Cyclops_ordering/metabolon/MetaboAnalyst/Diff_cycling_p05.csv", sep = ',', row.names = F)
 write.table(gain_amp_out, "../Cyclops_ordering/metabolon/MetaboAnalyst/Diff_cycling_GainAmp_p05.csv", sep = ',', row.names = F)
 write.table(lose_amp_out, "../Cyclops_ordering/metabolon/MetaboAnalyst/Diff_cycling_LoseAmp_p05.csv", sep = ',', row.names = F)
+write.table(diff_mesor_out, "../Cyclops_ordering/metabolon/MetaboAnalyst/Diff_mesor_BHQ1.csv", sep = ',', row.names = F)
 ```
 
 ```         

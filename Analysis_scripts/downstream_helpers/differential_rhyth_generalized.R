@@ -277,7 +277,7 @@ diff_rhyth = function(cyc_pred, tmm, genelist,  pb = NULL, useBatch = F, percent
       if(!is_empty(rm_NA)){
         gexp1 = gexp1[-rm_NA]
         times1 = times1[-rm_NA]
-        I1 = I[-rm_NA]
+        I1 = I1[-rm_NA]
         s1 = s1[-rm_NA]
         p1 = p1[-rm_NA]
         if(useBatch){b1 = b1[-rm_NA]}
@@ -720,15 +720,31 @@ mesor_differences = function(cyc_pred, tmm, genelist, pb = NULL, useBatch = F, p
 
   all_genes = foreach (gene_i = 1:ncol(gene1), .combine = rbind) %do%{
     gexp1 = as.numeric(unlist(gene1[,gene_i]))
+    times1 = times
+    s1 = s
+    p1 = p
+    I1 = I
+    if(useBatch){b1 = b}
+    rm_NA = which(is.na(gexp1))
+    if (length(rm_NA) <= floor(.7*nrow(gene1))){ #only proceed if >70% of data are not NA
+      
+      if(!is_empty(rm_NA)){
+        gexp1 = gexp1[-rm_NA]
+        times1 = times1[-rm_NA]
+        s1 = s1[-rm_NA]
+        p1 = p1[-rm_NA]
+        I1 = I1[-rm_NA]
+        if(useBatch){b1 = b1[-rm_NA]}
+      }
     gexp1 = blunt_outliers(gexp1, percentile = percentile)
     if(useBatch){
-      partial_model = lm(gexp1 ~ sin(times) + cos(times) + b + p + s)
-      full_model = lm(gexp1 ~ sin(times) + cos(times) + I + b + p + s)
-      design_mat = model.matrix(gexp1 ~ sin(times) + cos(times) + I + b + p + s)
+      partial_model = lm(gexp1 ~ sin(times1) + cos(times1) + b1 + p1 + s1)
+      full_model = lm(gexp1 ~ sin(times1) + cos(times1) + I1 + b1 + p1 + s1)
+      design_mat = model.matrix(gexp1 ~ sin(times1) + cos(times1) + I1 + b1 + p1 + s1)
     }else{
-      partial_model = lm(gexp1 ~ sin(times) + cos(times) + p + s)
-      full_model = lm(gexp1 ~ sin(times) + cos(times) + I + p + s)
-      design_mat = model.matrix(gexp1 ~ sin(times) + cos(times) + I + p + s)
+      partial_model = lm(gexp1 ~ sin(times1) + cos(times1) + p1 + s1)
+      full_model = lm(gexp1 ~ sin(times1) + cos(times1) + I1 + p1 + s1)
+      design_mat = model.matrix(gexp1 ~ sin(times1) + cos(times1) + I1 + p1 + s1)
     }
 
     anova_results = anova(partial_model, full_model)
@@ -742,8 +758,8 @@ mesor_differences = function(cyc_pred, tmm, genelist, pb = NULL, useBatch = F, p
     Gene_Symbols = colnames(gene1)[gene_i]
     
     rm_coeffs = grep("sin|cos",names(full_model[["coefficients"]]))
-    mesor_AD = mean(subset(design_mat[,-rm_coeffs], design_mat[, "Icond_1"]== 1 ) %*% full_model[["coefficients"]][-rm_coeffs]) 
-    mesor_CTL = mean(subset(design_mat[,-rm_coeffs], design_mat[, "Icond_1"]== 0 ) %*% full_model[["coefficients"]][-rm_coeffs]) 
+    mesor_AD = mean(subset(design_mat[,-rm_coeffs], design_mat[, "I1cond_1"]== 1 ) %*% full_model[["coefficients"]][-rm_coeffs]) 
+    mesor_CTL = mean(subset(design_mat[,-rm_coeffs], design_mat[, "I1cond_1"]== 0 ) %*% full_model[["coefficients"]][-rm_coeffs]) 
     
     # sin_coeff = full_model1[["coefficients"]][["sin(times)"]]
     # cos_coeff = full_model1[["coefficients"]][["cos(times)"]]
@@ -761,6 +777,9 @@ mesor_differences = function(cyc_pred, tmm, genelist, pb = NULL, useBatch = F, p
 
     info = cbind( Gene_Symbols, p_mesor, mesor_CTL, mesor_AD)
     return(info)
+    }
+    return(cbind( colnames(gene1)[gene_i], NA,NA, NA))
+    
   }
   all_genes = as_tibble(all_genes)
   all_genes$BHQ = p.adjust(as.numeric(all_genes$p_mesor), "BH")

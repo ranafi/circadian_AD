@@ -59,6 +59,10 @@ order_metabolon = function(metabolon_filename, metabolon_datakey, path_to_rosmap
   cycling_in_CTL = is_cycling(cyc_pred, emat, "cond_0", percentile = percentile)
   cycling_in_AD = is_cycling(cyc_pred, emat, "cond_1", percentile = percentile)
   cycling_in_AD_CTL_mthd2 = is_cycling_method2(cyc_pred, emat, useBatch = F, percentile = percentile)
+ 
+  gene_list_mesor =  unlist(unname(emat[!grepl("_D|_C", unlist(emat[,1])), 1])) # TEST ALL genes for Mesor diff (not just cyclers)
+  #run regression
+  mesor_diffs = mesor_differences(cyc_pred, emat, gene_list_mesor,useBatch = F, percentile = percentile)
   
   #select the metabolites with rhythm BHq-value < cutoff
   strong_cycling_in_CTL = dplyr::filter(cycling_in_CTL, as.numeric(BHQ) < BHQ_cutoff) %>% arrange(as.numeric(BHQ))
@@ -88,13 +92,19 @@ order_metabolon = function(metabolon_filename, metabolon_datakey, path_to_rosmap
   diff_rhythms_mthd2 = merge(dplyr::select(metabolon_data_key, CHEM_ID, SUPER_PATHWAY, SUB_PATHWAY, CHEMICAL_NAME, SHORT_NAME, CHEMSPIDER, HMDB, PUBCHEM, KEGG),
                            diff_rhythms_mthd2, by.x = "CHEM_ID", by.y = "Gene_Symbols", all.y = T)
   write.table(diff_rhythms_mthd2, paste0(path_to_cyclops_ordering, "metabolon/diff_rhythms_method2_CyclingBHQ",isCyclingSigCutoff_str,".csv"), col.names = T, row.names = F, sep = ',')
+  
+  mesor_diffs = merge(dplyr::select(metabolon_data_key, CHEM_ID, SUPER_PATHWAY, SUB_PATHWAY, CHEMICAL_NAME, SHORT_NAME, CHEMSPIDER, HMDB, PUBCHEM, KEGG),
+                      mesor_diffs, by.x = "CHEM_ID", by.y = "Gene_Symbols", all.y = T)
+  write.table(mesor_diffs, paste0(path_to_cyclops_ordering, "metabolon/all_metabolites_mesor_diffs.csv"), col.names = T, row.names = F, sep = ',')
+  
   if (plot_mets){
     ############
     # plotting #
     ############
     setwd(paste0(path_to_cyclops_ordering, "/metabolon"))
     top_dr_metabs = diff_rhythms %>% filter(as.numeric(p_val)<0.05) %>% dplyr::select(CHEM_ID) %>% unname %>% unlist
-    seedlist = c(strong_cycling_in_CTL$Gene_Symbols[1:3], strong_cycling_in_AD$Gene_Symbols[1:3], top_dr_metabs)
+    top_dm_metabs = mesor_diffs %>% filter(as.numeric(BHQ)<0.05) %>% dplyr::select(CHEM_ID) %>% unname %>% unlist
+    seedlist = c(strong_cycling_in_CTL$Gene_Symbols[1:3], strong_cycling_in_AD$Gene_Symbols[1:3], top_dr_metabs, top_dm_metabs)
     seedlist = unique(seedlist)
     rownames(emat) = NULL
     print(plot_gene_trace(cyc_pred = cyc_pred, tmm = emat, seedlist = seedlist, savePlots = T, percentile = percentile, adjust_points_for_batches = F))
