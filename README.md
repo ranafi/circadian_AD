@@ -24,7 +24,7 @@ The dataset(s) supporting this study are available in the AD Knowledge Portal:
 
 Access is restricted to preserve participant anonymity. To gain access, a Data Use Certificate (DUC) must be submitted:
 
-🔗 Apply for Data Access: https://adknowledgeportal.synapse.org/Data%20Access![image](https://github.com/user-attachments/assets/5dc75bb2-5fcf-4fd2-9596-476d026cb13d)
+🔗 Apply for Data Access: https://adknowledgeportal.synapse.org/Data%20Access
 
 
 
