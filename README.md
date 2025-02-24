@@ -1,4 +1,4 @@
-Cell-Type Specific Circadian Rhythms in CTL and AD Brains
+## Cell-Type Specific Circadian Rhythms in CTL and AD Brains
 This repository contains code for analyzing cell-type specific circadian rhythms in control (CTL) and Alzheimer's disease (AD) brains. The repository is organized as follows:
 
 📂 Cyclops_ordering/ – Contains analysis results, categorized by cell type.
