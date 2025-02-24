@@ -2,9 +2,13 @@
 This repository contains code for analyzing cell-type specific circadian rhythms in control (CTL) and Alzheimer's disease (AD) brains. The repository is organized as follows:
 
 📂 Cyclops_ordering/ – Contains analysis results, categorized by cell type.
+
 📂 Analysis_scripts/ – Code used to generate the main analysis results.
+
 📂 Figure_scripts/ – Code for reproducing the figures in the paper.
+
 📂 Stochastic_clock_Julia/ – Implementation of our stochastic clock model.
+
 📂 Raw_data/ – (Intentionally left empty.)
 
 📄 Paper DOI
