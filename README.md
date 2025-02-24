@@ -15,11 +15,15 @@ This repository contains code for analyzing cell-type specific circadian rhythms
 (DOI to be added once available.)
 
 📊 Dataset Availability
+
 The dataset(s) supporting this study are available in the AD Knowledge Portal:
+
 🔗 Synapse:syn3219045
+
 🔗 Synapse:syn26007830
 
 Access is restricted to preserve participant anonymity. To gain access, a Data Use Certificate (DUC) must be submitted:
+
 🔗 Apply for Data Access
 
 
