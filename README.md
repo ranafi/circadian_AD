@@ -12,7 +12,7 @@ This repository contains code for analyzing cell-type specific circadian rhythms
 📂 Raw_data/ – (Intentionally left empty.)
 
 📄 Paper DOI
-(DOI to be added once available.)
+https://www.biorxiv.org/content/10.1101/2025.02.21.639499v1
 
 📊 Dataset Availability
 
