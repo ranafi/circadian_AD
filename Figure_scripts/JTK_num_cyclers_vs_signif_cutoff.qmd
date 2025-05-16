@@ -19,8 +19,8 @@ setwd("Core_clock_face_python_plots/")
 linewidth = 1
 
 
-get_num_genes_helper = function(df, amp_ratio_cutoff = 0.){
-  df = filter(df, ampRatio >= amp_ratio_cutoff)
+get_num_genes_helper = function(df){
+  # df = filter(df, ampRatio >= amp_ratio_cutoff)
   df = df[order(df$BH.Q),]
   df$num_genes_w_ties = seq_along(df$BH.Q) #Create a cumulative count column
   df = df %>% mutate(log10BHQ = -log10(BH.Q))
@@ -32,9 +32,9 @@ get_num_genes_helper = function(df, amp_ratio_cutoff = 0.){
 }
 get_num_genes = function(filename){
   file = read_csv(filename, show_col_types = F)
-  file$mean = rowMeans(file[,-c(1:6)])
-  file$ampRatio = file$AMP/file$mean
-  results = get_num_genes_helper(file, amp_ratio_cutoff = 0.)
+  # file$mean = rowMeans(file[,-c(1:6)])
+  #file$ampRatio = file$AMP/file$mean
+  results = get_num_genes_helper(file)
   
 }
 
@@ -48,7 +48,7 @@ APP_astro = get_num_genes("JTKresult_astro_APP_data.csv")
 APP_mglia = get_num_genes("JTKresult_micro_APP_data.csv")
 
 #Get unique genes as a function of -log10(BHQ)
-get_unique_genes = function(bulk_df, mglia_df, astro_df, cutoff_seq = seq(0, 10, by = 0.01)){
+get_unique_genes = function(bulk_df, mglia_df, astro_df, cutoff_seq = seq(1e-4, 10, by = 0.01)){
     # Helper function to filter genes based on cutoff
   filter_genes <- function(tibble, cutoff) {
     tibble %>% filter(`log10BHQ` >= cutoff) %>% pull(CycID)
@@ -154,7 +154,7 @@ ggsave("~/Desktop/Mouse_JTK_Cyclers_vs_BHQcutoff.pdf", plot = out, width = 8, he
 Sanity checks
 
 ```{r}
-x = 0.0
+x = 1
 tmp_mglia = filter(WT_mglia, log10BHQ >= x)
 tmp_astro = filter(WT_astro, log10BHQ >= x)
 tmp_bulk = filter(WT_bulk, log10BHQ >= x)

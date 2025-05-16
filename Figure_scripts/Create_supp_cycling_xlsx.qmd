@@ -57,7 +57,7 @@ merge_csvs_to_xlsx("Inhibitory Neurons", "../Cyclops_ordering/downstream_output_
 ### Astrocytes All
 
 ```{r}
-merge_csvs_to_xlsx("Asctrocytes", "../Cyclops_ordering/downstream_output_Ast_all/", "../../edgeR_diff_expression/Ast_All/Ast_all_filtByExpr_edgeR_DE_QLFTest.csv", "~/Desktop/Ast.xlsx")
+merge_csvs_to_xlsx("Astrocytes", "../Cyclops_ordering/downstream_output_Ast_all/", "../../edgeR_diff_expression/Ast_All/Ast_all_filtByExpr_edgeR_DE_QLFTest.csv", "~/Desktop/Ast.xlsx")
 ```
 
 Microglia All

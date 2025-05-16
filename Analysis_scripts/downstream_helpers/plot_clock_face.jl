@@ -26,6 +26,7 @@ signif_Values_arg = map(x -> parse(Float64, x), split(BHQ, ","))
 AR = ARGS[7]
 amp_ratio_arg = map(x -> parse(Float64, x), split(AR, ","))
 
+cosine_distance(θ1::Real, θ2::Real) = 1 - cos(θ1 - θ2)
 
 function Circular_Mean(phases::Array{T,1} where T <: Union{Float64, Float32})
 	if length(phases) < 1
@@ -66,11 +67,13 @@ function plot_clock_face(plotname, GOI,GOI_Acrophases, GOI_Ideal, Ideal_Acrophas
     plot_ideals = mod.(-(Ideal_Acrophases .- π/2), 2π)
     # cmap = ColorMap("mycmap",[RGB(1,0,0),RGB(.5,.5,.5),RGB(0,1,0)])
     PyPlot.set_cmap("RdYlBu_r")
-    minus_log_sig =  -log10.(signif_Values)
-    sc = PyPlot.scatter(plot_acrophases, ones(length(plot_acrophases)), alpha = 0.8, c = minus_log_sig, s = amp_ratio * 1e3, label = "")
+    # minus_log_sig =  -log10.(signif_Values)
+    cos_dist = cosine_distance.(plot_acrophases, plot_ideals)
+
+    sc = PyPlot.scatter(plot_acrophases, ones(length(plot_acrophases)), alpha = 0.8, c = cos_dist, s = amp_ratio * 1e3, label = "")
     PyPlot.scatter(plot_ideals, ones(length(plot_acrophases)) .* 0.5, alpha = 0.8, s = 75, c = "g", label = "")
-    clim(minimum(minus_log_sig), maximum(minus_log_sig))
-    colorbar(orientation = "horizontal", shrink = .8, label = "-Log(BHQ value)")
+    clim(0, 2)
+    colorbar(orientation = "horizontal", shrink = .8, label = "Cosine distance")
 
     # Add a legend for the size of the dots
     for ratio in [0.1, 0.3, .5]

@@ -284,8 +284,8 @@ if(!(dir.exists(paste0(path_to_cyclops_ordering, "downstream_output/fGSEA/fGSEA_
 }
 setwd(paste0(path_to_cyclops_ordering,"downstream_output/fGSEA/rnk_files"))
 rnk_files = list.files(pattern = ".rnk")
-#I dont want any remapping for these genes becase they are custom pathways
-#that by construction are found in my rosmap humans.
+
+
 run_fgsea(rnk_files, gene_dict = gene_remapping_dict, sleep_wake_pathways,dir = "fGSEA_results_sleep_wake", max_size = 5000) #make max_size big because these pathways of interest are large
 ```
 

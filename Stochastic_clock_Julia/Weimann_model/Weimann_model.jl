@@ -400,10 +400,31 @@ y_avg = [k[2] for k in keys(z_avg)]
 z_avg_values = [v for v in values(z_avg)]
 
 
-plot(x_avg, y_avg, z_avg_values,
-    st=:surface,camera=(-30,30),
-    xtickfontsize=12,ytickfontsize=12,ztickfontsize=12,legendfontsize=15,
-    xflip = true)
+# plot(x_avg, y_avg, z_avg_values,
+#     st=:surface,camera=(-30,30),
+#     xtickfontsize=12,ytickfontsize=12,ztickfontsize=12,legendfontsize=15,
+#     xflip = true)
+
+# 1. Extract and sort the grid points
+x_vals = sort(unique(first.(keys(z_avg))))
+y_vals = sort(unique(last.(keys(z_avg))))
+
+# 2. Build the Z matrix
+#    Note the order: rows correspond to y, columns to x
+Z = [ z_avg[(x,y)] for y in y_vals, x in x_vals ]
+
+# 3. Plot the heatmap
+p = heatmap(
+    x_vals, y_vals, Z;
+    xlabel         = "Translation Reduction",
+    ylabel         = "Translation Noise",
+    colorbar_title = " ",
+    xtickfontsize  = 12,
+    ytickfontsize  = 12,
+    legendfontsize = 15,
+    xflip          = true        # if you still want to flip X
+)
+savefig(p, "/Users/henryhollis/Desktop/heatmap.pdf")
 
 out = DataFrame(Answers2, :auto)
 rename!(out, ["ribo_slow", "ribo_noise", "sd", "md", "mn", "mdn", "IV"])  # Assign custom column names

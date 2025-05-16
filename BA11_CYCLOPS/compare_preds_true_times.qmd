@@ -1,0 +1,295 @@
+---
+title: "Untitled"
+format: html
+editor: visual
+---
+
+## 
+
+```{r}
+library(tidyverse)
+library(NMOF)
+```
+
+```{r}
+data = read_csv("data/BA11.csv")
+preds = read_csv("Cyclops_ordering/Fits/Fit_Output_2025-04-24T13_37_00.csv")
+```
+
+```{r}
+
+cosine_distance <- function(xs, ys) {
+  1 - cos(xs - ys)
+}
+
+gridfunc = function(param, true_phases, pred_phases){
+  shift_from_original = param[1]
+  mean(cosine_distance(true_phases, (pred_phases + shift_from_original)%%(2*pi))^2)
+}
+
+find_best_forward_backward_alignment_grid_search <- function(l1, l2) {
+  true_phases = l1[!is.na(l2)]
+  pred_phases = l2[!is.na(l2)]
+  
+  forward_search = gridSearch(gridfunc, levels = list(x =  seq(-2*pi, 2*pi, by = .05)), method = 'multicore', mc.control = list(mc.cores = 10), true_phases = true_phases, pred_phases = pred_phases)
+  forward_min = forward_search$minfun
+  forward_shift = forward_search$minlevel
+  forward_list_of_phases = (pred_phases+forward_shift)%%(2*pi)
+  
+  pred_phases = (-l2[!is.na(l2)])%%(2*pi)
+  
+  return(forward_list_of_phases)
+}
+
+
+all(colnames(data)[-1] == preds$ID)
+tod_rads = data[2,-1] %>% unname %>% unlist %>% as.numeric
+preds$tod_rads = tod_rads
+
+preds$phase_shift = find_best_forward_backward_alignment_grid_search(tod_rads, preds$Phases_MA)
+
+library(circular)
+source("../Analysis_scripts/downstream_helpers/CircularCorrelations.R")
+
+my_low_color <- "#5A5DA5"    # Replace with your desired low color
+my_mid_color <- "#FDFFD2"   # Replace with your desired mid color
+my_high_color <- "#B93451"    # Replace with your desired high color
+my_midpoint <- 1 
+
+
+Fischer_Circular_CorrelationMeasures(preds$phase_shift, tod_rads)
+Jammalamadaka_Circular_CorrelationMeasures(preds$phase_shift, tod_rads)
+
+# Calculate circular correlation
+circular_corr <- cor.circular(preds$phase_shift, tod_rads, test = T)
+preds$diff <- cosine_distance(preds$phase_shift, tod_rads) 
+
+out = ggplot(preds, aes(x = tod_rads, y = phase_shift) )+
+  geom_point(aes(fill = diff), shape = 21, color = "black", size = 2.5, alpha = .7, stroke = 0.5)+
+  ylab("CYCLOPS predicted subject phase")+
+  xlab("Subject TOD")+
+  ggtitle(paste0("Circular Correlation: ", round(circular_corr$cor, 2), ", p-val: ", round(circular_corr$p.value, 3)))+
+  scale_x_continuous(breaks = seq(0, 2 * pi, by = pi/2),
+                  labels = c("0", expression(pi/2), expression(pi),                           expression(3*pi/2), expression(2*pi))) +
+  scale_y_continuous(breaks = seq(0, 2 * pi, by = pi/2),
+                  labels = c("0", expression(pi/2), expression(pi),                           expression(3*pi/2), expression(2*pi)))+
+  theme_minimal()+
+  theme(
+    axis.text.x = element_text(size = 14),    # Increase x-axis text size
+    axis.text.y = element_text(size = 14),    # Increase y-axis text size
+    axis.title.x = element_text(size = 16),   # Increase x-axis title size
+    axis.title.y = element_text(size = 16),   # Increase y-axis title size
+    legend.title = element_text(size = 12)    # Increase legend title size
+  )+
+  scale_fill_gradient2(
+    low = my_low_color, 
+    mid = my_mid_color, 
+    high = my_high_color,
+    midpoint = my_midpoint,
+    name = "cos"
+  ) 
+print(out)
+
+```
+
+### save_pdf:
+
+```{r}
+ggsave("~/Desktop/CYCLOPS_preds_vs_TOD.pdf", plot = out, width = 5.2, height = 5, units = "in")
+```
+
+Which phases did I get right?
+
+```{r}
+
+
+all(colnames(data)[-1] == preds$ID)
+age = data[3,-1] %>% unname %>% unlist %>% as.numeric
+preds$age = age
+
+
+# Apply the conditions using nested ifelse
+preds$age_bin <- ifelse(preds$age < 40, "Y", # If age < 40, set to "Y"
+                       ifelse(preds$age >= 60, "O",  # Else, if age > 60, set to "O"
+                              "M"))# Else (age is between 40 and 60 inclusive), set to "M"
+table(preds$age_bin)
+# 
+# test = aov(Error~age_bin, data = preds)
+# boxplot(Error~age_bin, data = preds)
+# summary(test)
+# 
+# test2 = aov(Circular_Error~age_bin, data = preds)
+# boxplot(Circular_Error~age_bin, data = preds)
+# summary(test2)
+
+
+test3 = aov(Magnitude~age_bin, data = preds)
+boxplot(Magnitude~age_bin, data = preds)
+
+mag_plot = ggplot(preds, aes(x = factor(age_bin, levels = c("Y", "M", "O")), y = Magnitude, fill = age_bin)) +
+  geom_boxplot(alpha = 0.80) +
+  geom_point(aes(fill = age_bin), size = 5, shape = 21, position = position_jitterdodge()) +
+  theme_minimal()+
+  theme(
+    axis.text.x = element_text(size = 14),    # Increase x-axis text size
+    axis.text.y = element_text(size = 14),    # Increase y-axis text size
+    axis.title.x = element_text(size = 16),   # Increase x-axis title size
+    axis.title.y = element_text(size = 16),   # Increase y-axis title size
+    legend.title = element_text(size = 12)    # Increase legend title size
+  )
+
+summary(test3)
+
+test4 = aov(Out_of_Plane_Reconstruction_Error~age_bin, data = preds)
+boxplot(Out_of_Plane_Reconstruction_Error~age_bin, data = preds)
+summary(test4)
+
+test5 = aov(diff~age_bin, data = preds)
+boxplot(diff~age_bin, data = preds)
+summary(test5)
+
+diff_plot = ggplot(preds, aes(x = factor(age_bin, levels = c("Y", "M", "O")), y = diff, fill = age_bin)) +
+  geom_boxplot(alpha = 0.80) +
+  geom_point(aes(fill = age_bin), size = 5, shape = 21, position = position_jitterdodge()) +
+  theme_minimal()+
+  theme(
+    axis.text.x = element_text(size = 14),    # Increase x-axis text size
+    axis.text.y = element_text(size = 14),    # Increase y-axis text size
+    axis.title.x = element_text(size = 16),   # Increase x-axis title size
+    axis.title.y = element_text(size = 16),   # Increase y-axis title size
+    legend.title = element_text(size = 12)    # Increase legend title size
+  )+
+  ylab("CYCLOPS phases vs TOD Cosine distance ")+
+  xlab("Age bin")
+
+```
+
+Save PDF:
+
+```{r}
+ggsave("~/Desktop/BA11_maginute_vs_age.pdf", plot = mag_plot, width = 5.2, height = 5, units = "in")
+
+ggsave("~/Desktop/BA11_cosine_dist_vs_age.pdf", plot = diff_plot, width = 5.2, height = 5, units = "in")
+```
+
+```{r}
+
+age_colors <- c("Y" = "darkgreen", 
+                "O" = "darkred", 
+                "M" = "grey") 
+out = ggplot(preds, aes(x = tod_rads, y = phase_shift) )+
+  geom_point(aes(fill = as.factor(age_bin)), shape = 21, color = "black", size = 2.5, alpha = .7, stroke = 0.5)+
+  ylab("CYCLOPS predicted subject phase")+
+  xlab("Subject TOD")+
+  scale_x_continuous(breaks = seq(0, 2 * pi, by = pi/2),
+                  labels = c("0", expression(pi/2), expression(pi),                           expression(3*pi/2), expression(2*pi))) +
+  scale_y_continuous(breaks = seq(0, 2 * pi, by = pi/2),
+  labels = c("0", expression(pi/2), expression(pi),                           expression(3*pi/2), expression(2*pi)))+
+    scale_color_manual(
+    name = "Age Group",  # Optional: Set a nice legend title
+    values = age_colors # Apply the specific colors
+  ) +
+  theme_minimal()+
+  theme(
+    axis.text.x = element_text(size = 14),    # Increase x-axis text size
+    axis.text.y = element_text(size = 14),    # Increase y-axis text size
+    axis.title.x = element_text(size = 16),   # Increase x-axis title size
+    axis.title.y = element_text(size = 16),   # Increase y-axis title size
+    legend.title = element_text(size = 12)    # Increase legend title size
+  )
+print(out)
+```
+
+Different Version:
+
+```{r}
+
+my_low_color <- "#5A5DA5"    # Replace with your desired low color
+my_mid_color <- "#FDFFD2"   # Replace with your desired mid color
+my_high_color <- "#B93451"    # Replace with your desired high color
+my_midpoint <- 1 
+
+plt_y = filter(preds, age_bin == "Y") %>% ggplot(., aes(x = tod_rads, y = phase_shift) )+
+  geom_point(aes(fill = diff), shape = 21, color = "black", size = 2.5, alpha = .7, stroke = 0.5)+
+  ylab("CYCLOPS predicted subject phase")+
+  xlab("Subject TOD")+
+  ggtitle("Young <40")+
+  scale_x_continuous(breaks = seq(0, 2 * pi, by = pi/2),
+                  labels = c("0", expression(pi/2), expression(pi),                           expression(3*pi/2), expression(2*pi))) +
+  scale_y_continuous(breaks = seq(0, 2 * pi, by = pi/2),
+                  labels = c("0", expression(pi/2), expression(pi),                           expression(3*pi/2), expression(2*pi)))+
+  theme_minimal()+
+  theme(
+    axis.text.x = element_text(size = 14),    # Increase x-axis text size
+    axis.text.y = element_text(size = 14),    # Increase y-axis text size
+    axis.title.x = element_text(size = 16),   # Increase x-axis title size
+    axis.title.y = element_text(size = 16),   # Increase y-axis title size
+    legend.title = element_text(size = 12)    # Increase legend title size
+  )+
+  scale_fill_gradient2(
+    low = my_low_color, 
+    mid = my_mid_color, 
+    high = my_high_color,
+    midpoint = my_midpoint,
+    name = "cos"
+  ) 
+
+
+plt_m = filter(preds, age_bin == "M") %>% ggplot(., aes(x = tod_rads, y = phase_shift) )+
+  geom_point(aes(fill = diff), shape = 21, color = "black", size = 2.5, alpha = .7, stroke = 0.5)+
+  ylab("CYCLOPS predicted subject phase")+
+  xlab("Subject TOD")+
+  ggtitle("Middle >=40 & <60")+
+  scale_x_continuous(breaks = seq(0, 2 * pi, by = pi/2),
+                  labels = c("0", expression(pi/2), expression(pi),                           expression(3*pi/2), expression(2*pi))) +
+  scale_y_continuous(breaks = seq(0, 2 * pi, by = pi/2),
+                  labels = c("0", expression(pi/2), expression(pi),                           expression(3*pi/2), expression(2*pi)))+
+  theme_minimal()+
+  theme(
+    axis.text.x = element_text(size = 14),    # Increase x-axis text size
+    axis.text.y = element_text(size = 14),    # Increase y-axis text size
+    axis.title.x = element_text(size = 16),   # Increase x-axis title size
+    axis.title.y = element_text(size = 16),   # Increase y-axis title size
+    legend.title = element_text(size = 12)    # Increase legend title size
+  )+
+  scale_fill_gradient2(
+    low = my_low_color, 
+    mid = my_mid_color, 
+    high = my_high_color,
+    midpoint = my_midpoint,
+    name = "cos"
+  ) 
+
+plt_o = filter(preds, age_bin == "O") %>% ggplot(., aes(x = tod_rads, y = phase_shift) )+
+  geom_point(aes(fill = diff), shape = 21, color = "black", size = 2.5, alpha = .7, stroke = 0.5)+
+  ylab("CYCLOPS predicted subject phase")+
+  xlab("Subject TOD")+
+  ggtitle("Old >= 60")+
+  scale_x_continuous(breaks = seq(0, 2 * pi, by = pi/2),
+                  labels = c("0", expression(pi/2), expression(pi),                           expression(3*pi/2), expression(2*pi))) +
+  scale_y_continuous(breaks = seq(0, 2 * pi, by = pi/2),
+                  labels = c("0", expression(pi/2), expression(pi),                           expression(3*pi/2), expression(2*pi)))+
+  theme_minimal()+
+  theme(
+    axis.text.x = element_text(size = 14),    # Increase x-axis text size
+    axis.text.y = element_text(size = 14),    # Increase y-axis text size
+    axis.title.x = element_text(size = 16),   # Increase x-axis title size
+    axis.title.y = element_text(size = 16),   # Increase y-axis title size
+    legend.title = element_text(size = 12)    # Increase legend title size
+  )+
+  scale_fill_gradient2(
+    low = my_low_color, 
+    mid = my_mid_color, 
+    high = my_high_color,
+    midpoint = my_midpoint,
+    name = "cos"
+  ) 
+```
+
+Save pdf:
+
+```{r}
+ggsave("~/Desktop/BA11_CYCLOPS_vs_TOD_Y_subset.pdf", plot = plt_y, width = 5.2, height = 5, units = "in")
+ggsave("~/Desktop/BA11_CYCLOPS_vs_TOD_M_subset.pdf", plot = plt_m, width = 5.2, height = 5, units = "in")
+ggsave("~/Desktop/BA11_CYCLOPS_vs_TOD_O_subset.pdf", plot = plt_o, width = 5.2, height = 5, units = "in")
+```

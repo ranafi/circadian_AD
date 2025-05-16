@@ -7,9 +7,11 @@ This repository contains code for analyzing cell-type specific circadian rhythms
 
 📂 Figure_scripts/ – Code for reproducing the figures in the paper.
 
-📂 Stochastic_clock_Julia/ – Implementation of our stochastic clock model.
+📂 Stochastic_clock_Julia/ – Implementation of our stochastic clock models (SDE and Gillespie).
 
 📂 Raw_data/ – (Intentionally left empty.)
+
+📂 BA11_CYCLOPS/ – CYCLOPS on Chen et al. BA11 cortex validation
 
 📄 Paper DOI
 https://www.biorxiv.org/content/10.1101/2025.02.21.639499v1

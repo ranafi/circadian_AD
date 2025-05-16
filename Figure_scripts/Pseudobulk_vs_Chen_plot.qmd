@@ -112,6 +112,13 @@ df$shifted_phase = find_best_forward_backward_alignment_grid_search(df$BA11.Peak
 ```{r}
 library(circular)
 source("../Analysis_scripts/downstream_helpers/CircularCorrelations.R")
+
+my_low_color <- "#5A5DA5"    # Replace with your desired low color
+my_mid_color <- "#FDFFD2"   # Replace with your desired mid color
+my_high_color <- "#B93451"    # Replace with your desired high color
+my_midpoint <- 1 
+
+
 Fischer_Circular_CorrelationMeasures(df$BA11.Peak_mod, df$shifted_phase)
 Jammalamadaka_Circular_CorrelationMeasures(df$BA11.Peak_mod, df$shifted_phase)
 
@@ -119,17 +126,16 @@ core_clock = toupper(c("Arntl", "Clock", "Npas2", "Nr1d1", "Bhlhe41",   "Nr1d2",
   
 # Calculate circular correlation
 circular_corr <- cor.circular(df$BA11.Peak_mod, df$shifted_phase, test = T)
- 
+df$diff <- cosine_distance(df$shifted_phase, df$BA11.Peak_mod) 
+
 out = ggplot(df, aes(x = BA11.Peak_mod, y = shifted_phase, label = Gene) )+
-  geom_point(shape = 16, size = 2, alpha = .7,color = "#0091ff")+
-  xlim(0, 2*pi)+
-  ylim(0, 2*pi)+
-  # geom_text(hjust=0, vjust=0)+
+ geom_point(aes(fill = diff), shape = 21, color = "black", size = 2.5, alpha = .7, stroke = 0.5)+
   ggrepel::geom_text_repel(data = subset(df, Gene %in% core_clock),
                   aes(label = Gene),
                   box.padding = 0.5, 
                   point.padding = 0.5,
-                  size = 5)+
+                  size = 5,
+                  color = "black")+
   ylab("Predicted Gene Acrophase in ROSMAP")+
   xlab("Measured Gene Acrophase from Chen et al.")+
   ggtitle(paste0("Circular Correlation: ", round(circular_corr$cor, 2), ", p-val: ", round(circular_corr$p.value, 3)))+
@@ -144,20 +150,98 @@ out = ggplot(df, aes(x = BA11.Peak_mod, y = shifted_phase, label = Gene) )+
     axis.title.x = element_text(size = 16),   # Increase x-axis title size
     axis.title.y = element_text(size = 16),   # Increase y-axis title size
     legend.title = element_text(size = 12)    # Increase legend title size
-  )
+  )+
+  scale_fill_gradient2(
+    low = my_low_color, 
+    mid = my_mid_color, 
+    high = my_high_color,
+    midpoint = my_midpoint,
+    name = "cos"
+  ) 
 print(out)
 ```
 
 ## save pdf
 
 ```{r}
-ggsave("~/Desktop/CYCLOPS_CTL_bulkBHQ1AR20_vs_Chen_acrophasesBHQ1.pdf", plot = out, width = 5, height = 5, units = "in")
+ggsave("~/Desktop/CYCLOPS_CTL_bulkBHQ1AR20_vs_Chen_acrophasesBHQ1.pdf", plot = out, width = 5.2, height = 5, units = "in")
 ```
 
 The best alignment isn't allowed to flip the phases, so check here that they wern't flipped:
 
 ```{r}
 plot(df$shifted_phase, df$acrophase)
+```
+
+### Bland-Altman plot
+
+```{r}
+library(ggplot2)
+library(ggrepel)
+
+# 1. Compute the signed difference
+df$diff <- cosine_distance(df$shifted_phase, df$BA11.Peak_mod) 
+# df = df %>% mutate(diff_fixed = ifelse(abs(diff)>pi,diff - sign(diff)*2*pi, diff) )
+
+# 2. Compute mean and limits of agreement
+# mean_diff <- mean(df$diff, na.rm = TRUE)
+# sd_diff   <- sd(df$diff,   na.rm = TRUE)
+# loa       <- 1.96 * sd_diff
+
+# 3. Make the Bland–Altman–style plot
+ggplot(df, aes(x = BA11.Peak_mod, y = diff, label = Gene)) +
+  geom_point(shape = 16, size = 2, alpha = .7, color = "#0091ff") +
+  
+  # highlight core_clock genes with labels
+  geom_text_repel(
+    data = subset(df, Gene %in% core_clock),
+    aes(label = Gene),
+    box.padding   = 0.5,
+    point.padding = 0.5,
+    size          = 5
+  ) +
+  #  scale_y_continuous(
+  #   breaks = seq(-pi,pi, by = pi/4),
+  #   labels = c(
+  #     expression(-pi), expression(-3*pi/4),
+  #     expression(-pi/2),  expression(-pi/4),
+  #     "0",
+  #     expression(pi/4),   expression(pi/2),
+  #     expression(3*pi/4), expression(pi)
+  #   )
+  # ) +
+    ylim(0,2)+
+
+  # mean diff and limits of agreement
+  geom_hline(yintercept = 0,           linetype = "dashed") +
+  # geom_hline(yintercept = mean_diff + loa,     linetype = "dashed") +
+  # geom_hline(yintercept = mean_diff - loa,     linetype = "dashed") +
+  
+  # axis limits and breaks (same circular scale)
+  xlim(0, 2*pi) +
+  scale_x_continuous(
+    breaks = seq(0, 2*pi, by = pi/2),
+    labels = c("0", expression(pi/2), expression(pi),
+               expression(3*pi/2), expression(2*pi))
+  ) +
+  
+  # labels
+  xlab("Measured CTL cortex gene acrophases") +
+  ylab("CYCLOPS predicted gene acrophases ") +
+  # ggtitle(sprintf(
+  #   "Mean difference = %.2f,  LoA = ±%.2f", 
+  #   mean_diff, loa
+  # )) +
+  
+  theme_minimal() +
+  theme(
+    axis.text.x    = element_text(size = 14),
+    axis.text.y    = element_text(size = 14),
+    axis.title.x   = element_text(size = 16),
+    axis.title.y   = element_text(size = 16),
+    plot.title     = element_text(size = 14, face = "bold")
+  )
+
 ```
 
 ### Clock Face Plots

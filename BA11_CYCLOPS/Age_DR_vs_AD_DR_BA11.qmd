@@ -1,0 +1,175 @@
+---
+title: "Perform Downstream Analysis"
+output: html_notebook
+editor_options: 
+  chunk_output_type: inline
+---
+
+This notebook is for comparing the AGE-diff rhythmic genes found from Chen et al to the AD diff rhythmic genes found in ROSMAP
+
+### Load Packages
+
+```{r Load Libraries, include=FALSE}
+library(tidyverse)
+library(readxl)
+
+```
+
+### Read in Chen DR genes:
+
+```{r}
+
+file <- "~/Downloads/pnas.1508249112.sd02.xlsx"
+#can be found here "https://www.pnas.org/doi/suppl/10.1073/pnas.1508249112/suppl_file/pnas.1508249112.sd03.xlsx" 
+
+sheets_to_read <- c("Base.shift", "Amp.change", "Phase.shift", "Loss.rhythmicity", "Gain.rhythmicity")
+data_list_robust <- list()
+
+ for (sheet_name in sheets_to_read) {
+    cat("Attempting to read sheet:", sheet_name, "\n")
+    tryCatch({
+      data_list_robust[[sheet_name]] <- read_excel(
+        path = file,
+        sheet = sheet_name,
+        col_names = TRUE 
+        ) %>% dplyr::select(Gene) %>% drop_na
+      cat("Successfully read sheet:", sheet_name, "\n")
+    }, error = function(e) {
+      warning("Could not read sheet '", sheet_name, "'. Error: ", e$message)
+      data_list_robust[[sheet_name]] <- NULL
+    })
+ }
+
+Chen_DR = unique(unlist(data_list_robust, recursive = T, use.names = F))
+```
+
+### Read in Chen's cycling genes BA11
+
+```{r}
+Chen_df = read_excel("~/Downloads/pnas.1508249112.sd01 (1).xlsx", sheet = 1)
+#A couple duplicate gene names in Chen_R, for those duplicates, randomly choose one:
+#Resolve duplicates
+set.seed(123)  # Set seed for reproducibility
+Chen_df <- Chen_df %>%
+  group_by(Gene) %>%
+  slice_sample(n = 1) %>%
+  ungroup() 
+
+stopifnot(!any(duplicated(Chen_df$Gene)))
+
+Chen_bkg = Chen_df$Gene %>% unname %>% unlist
+Chen_cycling = filter(Chen_df, BA11.Pval < 0.05) %>% select(Gene) %>% unname %>% unlist
+```
+
+### Are Chen's Age-DR genes overrepresented in my AD-DR genes?
+
+```{r}
+
+FET_chen_v_human = function(chen_bckgrnd, chen_sig, rel_path_human_cyclers, BHQ_cutoff = 0.3){
+  
+stopifnot(all(chen_sig %in% chen_bckgrnd))
+all_human_genes = read_csv(rel_path_human_cyclers, show_col_types = F)
+
+#Get renames for human genes:
+human_remapping = read.delim("../Analysis_scripts/MsigDB_gmts_for_GSEA/Human_Gene_Symbol_with_Remapping_MSigDB.v2024.1.Hs.chip", sep = "\t")
+
+all_human_genes_w_alias = merge(all_human_genes, human_remapping, by.x = "Gene_Symbols", by.y = "Probe.Set.ID", all.y = F, all.x = T) 
+
+
+remapped_idx = which(!(is.na(all_human_genes_w_alias$Gene.Symbol))) #idx of all_human_genes_w_alias found in human_remapping
+all_human_genes_w_alias$Gene_Symbols[remapped_idx] = all_human_genes_w_alias$Gene.Symbol[remapped_idx] #rename first column if found
+
+stopifnot(all(all_human_genes_w_alias$Gene_Symbols == all_human_genes_w_alias$Gene.Symbol, na.rm = T))
+
+
+#Resolve duplicates
+set.seed(123)  # Set seed for reproducibility
+all_human_genes_w_alias <- all_human_genes_w_alias %>%
+  group_by(Gene_Symbols) %>%
+  slice_sample(n = 1) %>%
+  ungroup() 
+
+stopifnot(!any(duplicated(all_human_genes_w_alias$Gene_Symbols)))
+
+
+### Do the same for Chen genes###
+Chen = data.frame(Gene_Symbols = chen_bckgrnd)
+Chen$sig = F
+Chen$sig[Chen$Gene_Symbols %in% chen_sig] = T
+
+all_chen_genes_w_alias = merge(Chen, human_remapping, by.x = "Gene_Symbols", by.y = "Probe.Set.ID", all.y = F, all.x = T) 
+
+remapped_idx_chen = which(!(is.na(all_chen_genes_w_alias$Gene.Symbol))) #idx of all_human_genes_w_alias found in human_remapping
+all_chen_genes_w_alias$Gene_Symbols[remapped_idx_chen] = all_chen_genes_w_alias$Gene.Symbol[remapped_idx_chen] #rename first column if found
+
+
+stopifnot(all(all_chen_genes_w_alias$Gene_Symbols == all_chen_genes_w_alias$Gene.Symbol, na.rm = T))
+
+
+#Resolve duplicates
+set.seed(123)  # Set seed for reproducibility
+all_chen_genes_w_alias <- all_chen_genes_w_alias %>%
+  group_by(Gene_Symbols) %>%
+  slice_sample(n = 1) %>%
+  ungroup() 
+
+stopifnot(!any(duplicated(all_chen_genes_w_alias$Gene_Symbols)))
+
+
+background_intersect = unique(intersect(all_human_genes_w_alias$Gene_Symbols, all_chen_genes_w_alias$Gene_Symbols))
+
+#sanity checks
+stopifnot(!any(duplicated(background_intersect)))
+stopifnot(all(background_intersect %in% all_human_genes_w_alias$Gene_Symbols))
+stopifnot(all(background_intersect %in% all_chen_genes_w_alias$Gene_Symbols))
+
+
+#Find the mouse cyclers in background intersect:
+chen_intersect = filter(all_chen_genes_w_alias,Gene_Symbols %in% background_intersect)
+
+stopifnot(all(chen_intersect$Gene_Symbols %in% all_human_genes_w_alias$Gene_Symbols))
+stopifnot(all(chen_intersect$Gene_Symbols %in% all_chen_genes_w_alias$Gene_Symbols))
+
+#Get human genes in the interesect backgrounds
+human_intersect = dplyr:: filter(all_human_genes_w_alias, Gene_Symbols %in% background_intersect)
+
+stopifnot(all(human_intersect$Gene_Symbols %in% all_human_genes_w_alias$Gene_Symbols))
+stopifnot(all(human_intersect$Gene_Symbols %in% all_chen_genes_w_alias$Gene_Symbols))
+
+human_sig_intersect = filter(human_intersect, as.numeric(BHQ) < BHQ_cutoff)
+stopifnot(all(human_sig_intersect$Gene_Symbols %in% human_intersect$Gene_Symbols))
+
+chen_sig_intersect = filter(chen_intersect, sig == T)
+stopifnot(all(chen_sig_intersect$Gene_Symbols %in% chen_intersect$Gene_Symbols))
+
+#Get the genes (human symbols) cycling in both mouse and human
+Cycling_chen_and_human = unique(intersect(chen_sig_intersect$Gene_Symbols, human_sig_intersect$Gene_Symbols))
+
+
+total_genes = length(background_intersect)
+human_sig = nrow(human_sig_intersect)
+chen_sig = nrow(chen_sig_intersect)
+
+a = length(Cycling_chen_and_human)
+b = chen_sig - a
+c = human_sig - a
+d = total_genes - (a+b+c)
+test_df = data.frame("HumanDR" = c(a, c), "HumanNotDR" = c(b,d ))
+rownames(test_df) = c("ChenDR", "ChenNotDR")
+test = fisher.test(test_df)
+print(test_df)
+print(chisq.test(test_df)$expected)
+return(test)
+}
+
+
+
+
+chen_sig = Chen_DR
+
+rel_path_human_cyclers = "../Cyclops_ordering/downstream_output_Pseudobulk_all/diff_rhythms_CyclingBHQ1AmpRatio20.csv"
+# rel_path_human_cyclers = "../Cyclops_ordering/downstream_output_Exc_all/diff_rhythms_CyclingBHQ1AmpRatio20.csv"
+# rel_path_human_cyclers = "../Cyclops_ordering/downstream_output_Pseudobulk_all/cosinor_results_CTL.csv"
+
+FET_chen_v_human(Chen_bkg, chen_sig, rel_path_human_cyclers, BHQ_cutoff = 0.3)
+```

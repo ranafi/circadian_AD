@@ -1,0 +1,1 @@
+eigendata on all subs, sqrt smoothness: 0.8580826

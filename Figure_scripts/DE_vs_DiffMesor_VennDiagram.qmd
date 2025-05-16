@@ -64,6 +64,14 @@ x <- list(
   `Diff. Expr.` = qlf_test$...1
 )
 
+# a = length(intersect(x$`Diff.  Mesor`, x$`Diff. Expr.`))
+# b = length(setdiff(x$`Diff.  Mesor`, x$`Diff. Expr.`))
+# c = length(setdiff(x$`Diff. Expr.`, x$`Diff.  Mesor`))
+# d = nrow(all_genes) - a - b - c
+# 
+# df = rbind(cbind(a, b), cbind(c, d))
+# FET = fisher.test(df)
+
 p1 = ggvenn(
   x, 
   fill_color = c("#0073C2FF", "#EFC000FF"),
