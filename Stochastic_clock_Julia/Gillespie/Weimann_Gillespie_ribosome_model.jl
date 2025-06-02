@@ -6,12 +6,12 @@ using Plots
 using Peaks # Import the package
 using Statistics # For mean and std
 
-# If V = 1 pL = 10⁻¹² L:
-# correct = (6.022 x 10^(23) molecules/mole) * (10⁻¹² L) / (10⁹ nM L / mole)
+# If V = 1 pL = 1x10⁻¹² L:
+# correct = (6.022 x 10^(23) molecules/mole) * (1x10⁻¹² L) / (1x10⁹ nM L / mole)
 # correct = 6.022 x 10^(23 - 12 - 9) molecules/nM
 
 #----parameters----
-correct = 602.2
+correct = 602.2 * 3.7 #assuming cell volumn is 3.7 pL
 ### This script implements a modified version of this model: https://pmc.ncbi.nlm.nih.gov/articles/PMC1304775/
 
 v1b = 9*correct #Maximal rate of Per2/Cry transcription
@@ -39,7 +39,7 @@ k6a = 0.09 #Activation rate of nuclear BMAL1
 k7a = 0.003 #Deactivation rate of nuclear BMAL1*
 k7d = 0.09 #Degradation rate of nuclear BMAL1*
 K_bind = 1
-K_release = 43 #h-1 from (T_transl) = L / Rate_elong = 500 aa / (21,600 aa/h) ≈ 0.023 hours
+K_release = 43 #h-1 from (T_transl) = L / Rate_elong = 500 aa / (6 aa/h * 3600 s/h) ≈ 0.023 hours https://doi.org/10.1371/journal.pone.0073943
 
 #params
 p = [v1b, k1b, k1i, c, p_hill, k1d, k2b, q, k2d, k2t, k3t, k3d, v4b, k4b, r, k4d, k5b, k5d, k5t, k6t, k6d, k6a, k7a, k7d, K_bind, K_release]
@@ -266,15 +266,23 @@ function consolidate_peaks_and_period(peak_indices, peak_times, species_data, mi
 end
 
 
+function find_closest_index(time::Vector{Float64}, value::Float64)
+    index = argmin(abs.(time .- value))
+    return index
+end
+
 window_size = 50 # Adjust window size for peak finding
 min_prom = 1.0 # Example: Require peak to be 
 species_to_analyze = 4
 min_peak_sep = 5.0 
-ribo_test = [30, 25, 20, 18, 16, 14, 12, 10, 8, 6] # Ribosome counts to test
+ribo_test = [25, 20, 18, 16, 14, 12, 10, 8, 6] # Ribosome counts to test
 iterate_lst = repeat(ribo_test, inner=(75,))
 t_start_steady = 1000.0
 out = zeros(size(iterate_lst, 1), 8) # Initialize as an empty array of type Float64
-mult = 3 # Multiplier for initial conditions
+bmal = zeros(size(iterate_lst, 1), 7) # Initialize as an empty array of type Float64
+per = zeros(size(iterate_lst, 1), 7) # Initialize as an empty array of type Float64
+
+mult = 1 # Multiplier for initial conditions
 Random.seed!(1234) # For reproducibility
 for (i, ribo_count) in enumerate(iterate_lst)
   
@@ -322,7 +330,26 @@ for (i, ribo_count) in enumerate(iterate_lst)
     )
     first_non_outlier = periods[findfirst(i -> !(i in outlier_p_idx), eachindex(periods))]
 
+    #Sample first non-outlier period:
+    use_period = findfirst(i -> !(i in outlier_p_idx), eachindex(periods))
+    idx_start = final_indices[use_period] #index of start
+    idx_stop = final_indices[use_period+1] #index of end
+    dur = times[idx_stop] - times[idx_start] #total time of oscillation
+    first = dur/6 + times[idx_start] #time 1/6 into first oscillation
+    first_ind =  find_closest_index(times, first) #index of times closest to given time
+    second = dur/3 + times[idx_start]
+    second_ind =  find_closest_index(times, second)
+    third = dur/2 + times[idx_start]
+    third_ind =  find_closest_index(times, third)
+    fourth = dur/(6/4) + times[idx_start]
+    fourth_ind = find_closest_index(times, fourth)
+    fifth = dur/(6/5) + times[idx_start]
+    fifth_ind = find_closest_index(times, fifth)
+    sixth = dur + times[idx_start]
+    sixth_ind = find_closest_index(times, sixth)
 
+    bmal[i, :] = [u0[8], result.data[first_ind,4], result.data[second_ind,4], result.data[third_ind,4], result.data[fourth_ind,4], result.data[fifth_ind,4], result.data[sixth_ind,4]] 
+    per[i, :] = [u0[8], result.data[first_ind,1], result.data[second_ind,1], result.data[third_ind,1], result.data[fourth_ind,1], result.data[fifth_ind,1], result.data[sixth_ind,1]] 
 
     println("Found $(length(final_indices)) consolidated peaks.")
     println("Consolidated peak times: $final_times")
@@ -350,8 +377,13 @@ distinct_ribo_counts = unique(out[:, 1])
 
 df = DataFrame(out, :auto)
 rename!(df,:x1 => :RibosomeCount, :x2 => :MeanPeriod, :x3 => :StdDevPeriod)
+using CSV
+CSV.write( joinpath(homedir(), "Desktop", "Gillespie_output.csv"), df)
 
-plt = @df df boxplot(
+df_filt = filter(row -> row.RibosomeCount in [25, 20, 18, 16, 14, 12, 10, 8], df)
+
+
+plt = @df df_filt boxplot(
     :RibosomeCount,    # Grouping variable for x-axis
     :StdDevPeriod,     # Values for y-axis
     xlabel = "Ribosome Count",
@@ -363,12 +395,16 @@ plt = @df df boxplot(
     # To ensure boxes are plotted for each unique RibosomeCount value
     # and not treated as a continuous variable for a single box:
     # group = :RibosomeCount # Often implicit if x is suitable
-    xticks = (unique(sort(df.RibosomeCount)), string.(unique(sort(df.RibosomeCount)))) # Ensure all distinct counts are ticks
+    xlims = (8 - 0.5, 25 + 0.5),
+    xticks = (unique(sort(df_filt.RibosomeCount)), string.(unique(sort(df_filt.RibosomeCount)))), # Ensure all distinct counts are ticks
+    xtickfont = font(12),
+    ytickfont = font(12),
+    size = (450, 450)
 )
 
 # 2. Overlay the individual data points (scatter plot)
 # We use the mutating version scatter! to add to the existing plot 'plt'
-@df df scatter!(
+@df df_filt scatter!(
     plt, # Add to the plot 'plt'
     :RibosomeCount,
     :StdDevPeriod,
@@ -380,7 +416,7 @@ plt = @df df boxplot(
 
 # 3. Calculate means for each group and plot a line connecting them
 # Group by RibosomeCount and calculate the median of StdDevPeriod
-grouped_meds = combine(groupby(df, :RibosomeCount), :StdDevPeriod => median => :MedStdDevPeriod)
+grouped_meds = combine(groupby(df_filt, :RibosomeCount), :StdDevPeriod => median => :MedStdDevPeriod)
 
 # Sort by RibosomeCount to ensure the line connects points in the correct order
 sort!(grouped_meds, :RibosomeCount)
@@ -397,47 +433,48 @@ sort!(grouped_meds, :RibosomeCount)
     linestyle = :dash,
     marker = :circle,        # Add markers at each mean point
     markercolor = :red,
-    label = "Mean Trend"     # Label for the legend
+
+    label = "Med Trend"     # Label for the legend
 )
 
 # Display the plot
 display(plt)
 
-savefig(plt, joinpath(homedir(), "Desktop", "ribosome_stddev_boxplot.pdf"))
+savefig(plt, joinpath(homedir(), "Desktop", "ribosome_stddev_boxplot_37pL_mult1.pdf"))
 
 
 
 
-# 1. Create the grouped violin plot
-plt = @df df violin( 
-    :RibosomeCount,
-    :StdDevPeriod,
-    xlabel = "Total ribosome count",
-    ylabel = "Standard deviation of period (hrs)",
-    title = "Period std. dev. by ribosome count",
-    legend = false,
-    linecolor = :black, # Outline of the violin
-    fillalpha = 0.75,
-    # side = :both, # Default, can also be :right or :left for half-violins
-    # points = false, # Default, we are adding points separately with scatter!
-    xticks = (unique(sort(df.RibosomeCount)), string.(unique(sort(df.RibosomeCount))))
-)
+# # 1. Create the grouped violin plot
+# plt = @df df violin( 
+#     :RibosomeCount,
+#     :StdDevPeriod,
+#     xlabel = "Total ribosome count",
+#     ylabel = "Standard deviation of period (hrs)",
+#     title = "Period std. dev. by ribosome count",
+#     legend = false,
+#     linecolor = :black, # Outline of the violin
+#     fillalpha = 0.75,
+#     # side = :both, # Default, can also be :right or :left for half-violins
+#     # points = false, # Default, we are adding points separately with scatter!
+#     xticks = (unique(sort(df.RibosomeCount)), string.(unique(sort(df.RibosomeCount))))
+# )
 
-# 2. Overlay the individual data points (scatter plot) - NO CHANGE HERE
-@df df scatter!(
-    plt,
-    :RibosomeCount,
-    :StdDevPeriod,
-    markercolor = :black,
-    markersize = 3,
-    markeralpha = 0.5,
-    label = ""
-)
-savefig(plt, joinpath(homedir(), "Desktop", "ribosome_stddev_violinplot.pdf"))
+# # 2. Overlay the individual data points (scatter plot) - NO CHANGE HERE
+# @df df scatter!(
+#     plt,
+#     :RibosomeCount,
+#     :StdDevPeriod,
+#     markercolor = :black,
+#     markersize = 3,
+#     markeralpha = 0.5,
+#     label = ""
+# )
+# savefig(plt, joinpath(homedir(), "Desktop", "ribosome_stddev_violinplot.pdf"))
 
 #####Plots for mean period:
 
-plt = @df df boxplot(
+plt = @df df_filt boxplot(
     :RibosomeCount,    # Grouping variable for x-axis
     :MeanPeriod,     # Values for y-axis
     xlabel = "Ribosome Count",
@@ -449,12 +486,17 @@ plt = @df df boxplot(
     # To ensure boxes are plotted for each unique RibosomeCount value
     # and not treated as a continuous variable for a single box:
     # group = :RibosomeCount # Often implicit if x is suitable
-    xticks = (unique(sort(df.RibosomeCount)), string.(unique(sort(df.RibosomeCount)))) # Ensure all distinct counts are ticks
+    xticks = (unique(sort(df_filt.RibosomeCount)), string.(unique(sort(df_filt.RibosomeCount)))), # Ensure all distinct counts are ticks
+    xlims = (8 - 0.5, 25 + 0.5),
+    xtickfont = font(12),
+    ytickfont = font(12),
+    size = (450, 450)
+
 )
 
 # 2. Overlay the individual data points (scatter plot)
 # We use the mutating version scatter! to add to the existing plot 'plt'
-@df df scatter!(
+@df df_filt scatter!(
     plt, # Add to the plot 'plt'
     :RibosomeCount,
     :MeanPeriod,
@@ -466,7 +508,7 @@ plt = @df df boxplot(
 
 # 3. Calculate means for each group and plot a line connecting them
 # Group by RibosomeCount and calculate the median of StdDevPeriod
-grouped_meds = combine(groupby(df, :RibosomeCount), :MeanPeriod => median => :Median_meanPeriod)
+grouped_meds = combine(groupby(df_filt, :RibosomeCount), :MeanPeriod => median => :Median_meanPeriod)
 
 # Sort by RibosomeCount to ensure the line connects points in the correct order
 sort!(grouped_meds, :RibosomeCount)
@@ -488,50 +530,122 @@ sort!(grouped_meds, :RibosomeCount)
 # Display the plot
 display(plt)
 
-savefig(plt, joinpath(homedir(), "Desktop", "ribosome_period_boxplot.pdf"))
+savefig(plt, joinpath(homedir(), "Desktop", "ribosome_period_boxplot_37pL_mult1.pdf"))
 
 
+#### Experimental code below ###
 
 
-# 1. Create the grouped violin plot
-plt = @df df violin( 
-    :RibosomeCount,
-    :MeanPeriod,
-    xlabel = "Total ribosome count",
-    ylabel = "Mean period (hrs)",
-    title = "Period length by ribosome count",
-    legend = false,
-    linecolor = :black, # Outline of the violin
-    fillalpha = 0.75,
-    # side = :both, # Default, can also be :right or :left for half-violins
-    # points = false, # Default, we are adding points separately with scatter!
-    xticks = (unique(sort(df.RibosomeCount)), string.(unique(sort(df.RibosomeCount))))
-)
+# # 1. Create the grouped violin plot
+# plt = @df df violin( 
+#     :RibosomeCount,
+#     :MeanPeriod,
+#     xlabel = "Total ribosome count",
+#     ylabel = "Mean period (hrs)",
+#     title = "Period length by ribosome count",
+#     legend = false,
+#     linecolor = :black, # Outline of the violin
+#     fillalpha = 0.75,
+#     # side = :both, # Default, can also be :right or :left for half-violins
+#     # points = false, # Default, we are adding points separately with scatter!
+#     xticks = (unique(sort(df.RibosomeCount)), string.(unique(sort(df.RibosomeCount))))
+# )
 
-# 2. Overlay the individual data points (scatter plot) - NO CHANGE HERE
-@df df scatter!(
-    plt,
-    :RibosomeCount,
-    :MeanPeriod,
-    markercolor = :black,
-    markersize = 3,
-    markeralpha = 0.5,
-    label = ""
-)
-savefig(plt, joinpath(homedir(), "Desktop", "ribosome_period_violinplot.pdf"))
+# # 2. Overlay the individual data points (scatter plot) - NO CHANGE HERE
+# @df df scatter!(
+#     plt,
+#     :RibosomeCount,
+#     :MeanPeriod,
+#     markercolor = :black,
+#     markersize = 3,
+#     markeralpha = 0.5,
+#     label = ""
+# )
+# savefig(plt, joinpath(homedir(), "Desktop", "ribosome_period_violinplot.pdf"))
 
 
+# bmal_mrna = DataFrame(bmal, :auto)
+# rename!(bmal_mrna,:x1 => :RibosomeCount)
+# using CSV
+# CSV.write( joinpath(homedir(), "Desktop", "Gillespie_37pL_bmalmRNA.csv"), bmal_mrna)
 
-# --- Simulation End Time ---
-tf = 1000.0 # Single float value
-u0 = [ 45,70,90,70,25,30,40, 6, 0, 0]
-# --- Run SSA ---
-Random.seed!(1234) # For reproducibility
-result= ssa(u0, calculate_propensities, nu, p, tf)
 
-# --- Plotting ---
-# Process the output (list of state vectors) into a matrix for plotting
-times = result.time
-states = result.data
+# per_mrna = DataFrame(per, :auto)
+# rename!(per_mrna,:x1 => :RibosomeCount)
+# CSV.write( joinpath(homedir(), "Desktop", "Gillespie_37pL_permRNA.csv"), per_mrna)
 
-plot(times, result.data[:,4])
+# # --- 1. Filter the DataFrame ---
+# target_ribo_counts = [14, 20]
+# df_filtered = filter(row -> row.RibosomeCount in target_ribo_counts, bmal_mrna)
+# time_column_names = names(df_filtered, Not(:RibosomeCount)) # Gets all columns except RibosomeCount
+# df_long = stack(df_filtered, time_column_names, :RibosomeCount,
+#                 variable_name=:TimePointLabel, # New column for original time column names
+#                 value_name=:Value)             # New column for the values from time columns
+
+# actual_time_values = [pi/3, 2*pi/3, pi, 4*pi/3, 5*pi/3, 2*pi] 
+# # Create a mapping from the original column names (now in TimePointLabel) to actual_time_values
+# # Ensure time_column_names are strings if TimePointLabel contains strings 
+# time_label_to_numeric_map = Dict(string(label) => val for (label, val) in zip(time_column_names, actual_time_values))
+# # Add a new column to df_long with these numeric time values for plotting
+# df_long.NumericTime = [time_label_to_numeric_map[string(tp_label)] for tp_label in df_long.TimePointLabel]
+
+
+# plt = plt_scatter = @df df_long scatter(
+#     :NumericTime,        # X-axis: our new numeric time values
+#     :Value,              # Y-axis: the actual data values
+#     group = :RibosomeCount, # Color points by RibosomeCount
+#     xlabel = "Phase",
+#     ylabel = "Simulated expression",
+#     # xticks = (actual_time_values, string.(actual_time_values)), # Use actual_time_values for tick positions and labels
+#     # Or if you want custom labels for ticks:
+#     xticks = (actual_time_values, ["pi/3", "2*pi/3", "pi", "4*pi/3", "5*pi/3", "2*pi"]),
+#     legend = :topleft, # Or :best, :outertopright, etc.
+#     markersize = 5,
+#     markerstrokewidth = 0.5
+# )
+
+# savefig(plt, joinpath(homedir(), "Desktop", "bmalMRNA_14_vs_20_ribo_37pL_mult1.pdf"))
+
+# #Same for PER
+
+# df_filtered = filter(row -> row.RibosomeCount in target_ribo_counts, per_mrna)
+# time_column_names = names(df_filtered, Not(:RibosomeCount)) # Gets all columns except RibosomeCount
+# df_long = stack(df_filtered, time_column_names, :RibosomeCount,
+#                 variable_name=:TimePointLabel, # New column for original time column names
+#                 value_name=:Value)             # New column for the values from time columns
+# time_label_to_numeric_map = Dict(string(label) => val for (label, val) in zip(time_column_names, actual_time_values))
+# # Add a new column to df_long with these numeric time values for plotting
+# df_long.NumericTime = [time_label_to_numeric_map[string(tp_label)] for tp_label in df_long.TimePointLabel]
+
+
+# plt = plt_scatter = @df df_long scatter(
+#     :NumericTime,        # X-axis: our new numeric time values
+#     :Value,              # Y-axis: the actual data values
+#     group = :RibosomeCount, # Color points by RibosomeCount
+#     xlabel = "Phase",
+#     ylabel = "Simulated expression",
+#     # xticks = (actual_time_values, string.(actual_time_values)), # Use actual_time_values for tick positions and labels
+#     # Or if you want custom labels for ticks:
+#     xticks = (actual_time_values, ["pi/3", "2*pi/3", "pi", "4*pi/3", "5*pi/3", "2*pi"]),
+#     legend = :topleft, # Or :best, :outertopright, etc.
+#     markersize = 5,
+#     markerstrokewidth = 0.5
+# )
+
+# savefig(plt, joinpath(homedir(), "Desktop", "perMRNA_14_vs_20_ribo_37pL_mult1.pdf"))
+
+#--------------------------------------
+
+# # --- Simulation End Time ---
+# tf = 1000.0 # Single float value
+# u0 = [ 45,70,90,70,25,30,40, 6, 0, 0]
+# # --- Run SSA ---
+# Random.seed!(1234) # For reproducibility
+# result= ssa(u0, calculate_propensities, nu, p, tf)
+
+# # --- Plotting ---
+# # Process the output (list of state vectors) into a matrix for plotting
+# times = result.time
+# states = result.data
+
+# plot(times, result.data[:,4])

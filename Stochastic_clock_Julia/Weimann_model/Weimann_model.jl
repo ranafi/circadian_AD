@@ -491,3 +491,37 @@ t2, b2, p2 = process_gene_traces(gene_tracings[181:200])
 plot_processed_gene_traces(t1, t2, b1,b2, p1, p2)
 # anova_discrete_exp_old(t1, t2, b1,b2, p1, p2)
 anova_discrete_exp(t1, t2, b1,b2, p1, p2)
+
+
+#What if I vary both ribo_slow and ribo_noise?
+
+Random.seed!(1234)
+Answers=[1,0,0,24,24, 0]
+ribo_noise_list = [0.03, 0.06]
+ribo_slow_list = [1.0, 0.66]
+gene_tracings = Vector{Tuple{Float64, Int64,Int64, Int64, Vector{Float64}, Vector{Float64}, Vector{Float64}}}()
+for i in [1,2]
+        for cnt in 1:20
+           ribo_noise = ribo_noise_list[i]
+           ribo_slow =  ribo_slow_list[i]
+           lans=run_model_withparameters(ribo_slow,ribo_noise)
+           sd=lans[1]
+           md=lans[2]
+           mn=lans[3]
+           mdn=lans[4]
+           IV=lans[5]
+           start_idx = lans[8]
+           end_idx = lans[9]
+           push!(gene_tracings, (i, cnt, start_idx, end_idx, lans[7][:,5], lans[7][:,2], lans[7][:,1]))
+           print([cnt,ribo_slow])
+           Answers=hcat(Answers,[ribo_slow,sd,md,mn,mdn, IV])
+       end
+       end
+Answers=transpose(Answers)
+Answers=Answers[2:end,:]
+
+
+t1, b1, p1 = process_gene_traces(gene_tracings[1:20])
+t2, b2, p2 = process_gene_traces(gene_tracings[21:40])
+plot_processed_gene_traces(t1, t2, b1,b2, p1, p2)
+anova_discrete_exp(t1, t2, b1,b2, p1, p2)
