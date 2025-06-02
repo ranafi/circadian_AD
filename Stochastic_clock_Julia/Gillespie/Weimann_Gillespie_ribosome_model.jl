@@ -39,7 +39,7 @@ k6a = 0.09 #Activation rate of nuclear BMAL1
 k7a = 0.003 #Deactivation rate of nuclear BMAL1*
 k7d = 0.09 #Degradation rate of nuclear BMAL1*
 K_bind = 1
-K_release = 43 #h-1 from (T_transl) = L / Rate_elong = 500 aa / (6 aa/h * 3600 s/h) ≈ 0.023 hours https://doi.org/10.1371/journal.pone.0073943
+K_release = 43 #h-1 from (T_transl) = L / Rate_elong = 500 aa / (6 aa/h * 3600 s/h) ≈ 0.023 hours https://doi.org/10.1016/j.cell.2011.10.002 , https://doi.org/10.1371/journal.pone.0073943
 
 #params
 p = [v1b, k1b, k1i, c, p_hill, k1d, k2b, q, k2d, k2t, k3t, k3d, v4b, k4b, r, k4d, k5b, k5d, k5t, k6t, k6d, k6a, k7a, k7d, K_bind, K_release]
