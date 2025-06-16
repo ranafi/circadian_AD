@@ -58,7 +58,7 @@ cell_anot_437 = read_csv("../ROSMAP_metadata/cell-annotation.n437.csv", show_col
 #This is how I identified that 12 subjects had two sequencing batches
 df_check <- cell_anot_437 %>%
   group_by(individualID) %>%
-  filter(!is.na(batch_new)) %>%  # Ignore NA values in the batch column
+  filter(!is.na(batch_new)) %>% 
   summarize(unique_batches = n_distinct(batch_new),
             batches = list(unique(batch_new))) %>%  # Get unique batch values
   filter(unique_batches > 1)
