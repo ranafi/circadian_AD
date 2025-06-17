@@ -481,23 +481,6 @@ plot_pcs(pc_res_rp, my_rosmap_meta$Study, "PCA Ribo Genes, Study")
 
 ```
 
-Dive into 12 subjects with multiple sequencing batches:
-
-```{r}
-# # subs = c("R2144127","R2880377","R4817881","R4996203","R5447358","R5693901",
-# # "R6280004","R6679530","R7702934","R8724814","R8760165","R8781115")
-# subs = c("82317494") #subject recorded as B4 and B55 so what cluster is it in?
-# 
-# 
-# color_vec = my_rosmap_meta$batch_bin
-# 
-# p2 = ggplot(as.data.frame(pc_res$x), aes(x = PC2, y = PC3, color = color_vec, shape = (colnames(my_tmm)) %in% subs))+geom_point(size = 3)
-# p3 = ggplot(as.data.frame(pc_res$x), aes(x = PC1, y = PC3, color = color_vec, shape = (colnames(my_tmm)) %in% subs)) +geom_point(size = 3)
-# p4 = ggplot(as.data.frame(pc_res$x), aes(x = PC2, y = PC3, color = (colnames(my_tmm)) %in% subs))+geom_point(size = 3)
-# p5 = ggplot(as.data.frame(pc_res$x), aes(x = PC1, y = PC3, color = (colnames(my_tmm)) %in% subs)) +geom_point(size = 3)
-# grid.arrange(p2, p3,p4,p5, nrow = 2)
-```
-
 ### Write Out TMM:
 
 ```{r}
