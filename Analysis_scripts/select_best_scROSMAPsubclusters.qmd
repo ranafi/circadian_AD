@@ -54,14 +54,13 @@ rosmap_meta = rosmap_clinical %>% filter(individualID %in% unique_subs_in_counts
 #which 437 subjects were used by Columbia?
 cell_anot_437 = read_csv("../ROSMAP_metadata/cell-annotation.n437.csv", show_col_types = F)%>% separate_wider_delim(cols ="batch", delim = "-", names = c("col1", "batch_new", "replicate"), too_many = "drop", too_few = "align_start", cols_remove = F)
 
-# Check if unique individuals have unique batch_new
-#This is how I identified that 12 subjects had two sequencing batches
-df_check <- cell_anot_437 %>%
-  group_by(individualID) %>%
-  filter(!is.na(batch_new)) %>% 
-  summarize(unique_batches = n_distinct(batch_new),
-            batches = list(unique(batch_new))) %>%  # Get unique batch values
-  filter(unique_batches > 1)
+# # Here are the 12 subjects whose seq_batch_new we're interested in
+# df_check <- cell_anot_437 %>%
+#   group_by(individualID) %>%
+#   filter(!is.na(batch_new)) %>% 
+#   summarize(unique_batches = n_distinct(batch_new),
+#             batches = list(unique(batch_new))) %>%  # Get unique batch values
+#   filter(unique_batches > 1)
 
 
 n437 = cell_anot_437 %>% dplyr::select(individualID, batch_new) %>% distinct
@@ -286,14 +285,14 @@ get_subcluster_data = function(str){
                              return.seurat = FALSE)
   cts = cts$RNA[,na.exclude(match(rosmap_meta$individualID_new, colnames(cts$RNA)))]
 }
-# cts = get_subcluster_data("^Exc\\.5$|^Exc\\.3$")
+cts = get_subcluster_data("^Exc\\.5$|^Exc\\.3$")
 # cts = get_subcluster_data("^Exc.*")
 # cts = get_subcluster_data("^Ast.*")
 # cts = get_subcluster_data("^Inh.*")
 # cts = get_subcluster_data("^Mic.*")
 # cts = get_subcluster_data(".*")
 # cts = get_subcluster_data("^Oli.*")
-cts = get_subcluster_data("^OPC.*")
+# cts = get_subcluster_data("^OPC.*")
 my_rosmap_meta = rosmap_meta[match(colnames(cts), rosmap_meta$individualID_new), ]
 
 ```
@@ -337,9 +336,9 @@ for (i in seq(1, length(summed_cnts_dup) - 1, by = 2)) {
     rm_dup <- c(rm_dup, names(summed_cnts_dup)[i + 1])
   }
 }
-#dups with less counts in exc3.5:
-rm_dup = c("R2144127-B52", "R2880377-B56", "R4817881-B53", "R4996203-B51", "R5447358-B36", "R5693901-B4",  "R6280004-B58", "R6679530-B60",
-"R7702934-B59", "R8724814-B46", "R8760165-B58", "R8781115-B43")
+# #dups with less counts in exc3.5:
+# rm_dup = c("R2144127-B52", "R2880377-B56", "R4817881-B53", "R4996203-B51", "R5447358-B36", "R5693901-B4",  "R6280004-B58", "R6679530-B60",
+# "R7702934-B59", "R8724814-B46", "R8760165-B58", "R8781115-B43")
 
 #dups with less counts in pseudobulk:
 rm_dup = c("R2144127-B52", "R2880377-B40", "R4817881-B53", "R4996203-B51", "R5447358-B36", "R5693901-B4",  "R6280004-B50", "R6679530-B52",
