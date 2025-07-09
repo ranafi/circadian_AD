@@ -8,6 +8,7 @@ editor: visual
 library(tidyverse)
 library(openxlsx)
 library(ordPens)
+library(car)
 ```
 
 ### Define functions:
@@ -25,6 +26,19 @@ format_df = function(data){
 
 ```
 
+## rRNA RT-PCR
+
+```{r}
+m47 = openxlsx::read.xlsx("m47sRTPCR.xlsx")
+df_m47 = format_df(m47)
+
+leveneTest_m47 = leveneTest(exp ~ grp, data = df_m47)
+print(leveneTest_m47)
+
+m47_model = lm(exp ~ grp, data = df_m47)
+summary(m47_model)
+```
+
 ## Western blots
 
 #### RPS6 b-tubulin:
@@ -33,8 +47,19 @@ format_df = function(data){
 RPS6 = openxlsx::read.xlsx("Aged_APP_CJL_riboproteins_WB.xlsx", sheet = "RPS6 b-tubulin")
 df_rps6 = format_df(RPS6)
 
+leveneTest_rps6 = leveneTest(exp ~ grp, data = df_rps6)
+print(leveneTest_rps6)
+
 rps6_model = lm(exp ~ group_numeric, data = df_rps6)
 summary(rps6_model)
+
+# rps6_residuals <- residuals(object = rps6_model)
+# qqnorm(rps6_residuals, 
+#        main = "Q-Q Plot of ANOVA Residuals",
+#        xlab = "Theoretical Quantiles",
+#        ylab = "Sample Quantiles (Residuals)")
+# qqline(rps6_residuals, col = "red", lwd = 2)
+
 
 cor.test(df_rps6$group_numeric, df_rps6$exp, method = "kendall")
 
@@ -55,6 +80,9 @@ ordAOV(df_rps6$group_numeric, df_rps6$exp, type = "RLRT", nsim = 1000000)
 RPL7a = openxlsx::read.xlsx("Aged_APP_CJL_riboproteins_WB.xlsx", sheet = "RPL7a b-tubulin")
 df_rpl7a = format_df(RPL7a)
 
+leveneTest_rpl7a = leveneTest(exp ~ grp, data = df_rpl7a)
+print(leveneTest_rpl7a)
+
 rpl7a_model = lm(exp ~ group_numeric, data = df_rpl7a)
 summary(rpl7a_model)
 
@@ -74,6 +102,9 @@ ordAOV(df_rpl7a$group_numeric, df_rpl7a$exp, type = "RLRT", nsim = 1000000)
 RPS27a = openxlsx::read.xlsx("Aged_APP_CJL_riboproteins_WB.xlsx", sheet = "RPS27a b-tubulin")
 
 df_rps27a = format_df(RPS27a)
+
+leveneTest_rps27a = leveneTest(exp ~ grp, data = df_rps27a)
+print(leveneTest_rps27a)
 
 rps27a_model = lm(exp ~ group_numeric, data = df_rps27a)
 summary(rps27a_model)
@@ -97,6 +128,9 @@ ordAOV(df_rps27a$group_numeric, df_rps27a$exp, type = "RLRT", nsim = 1000000)
 RPL10a = openxlsx::read.xlsx("Aged_APP_CJL_riboproteins_WB.xlsx", sheet = "RPL10a b-tubulin")
 
 df_rpl10a = format_df(RPL10a)
+
+leveneTest_rpl10a = leveneTest(exp ~ grp, data = df_rpl10a)
+print(leveneTest_rpl10a)
 
 rpl10a_model = lm(exp ~ group_numeric, data = df_rpl10a)
 summary(rpl10a_model)
@@ -123,6 +157,9 @@ dapi_dg = openxlsx::read.xlsx("Aged_BO_CJL_RPS6.xlsx", sheet = "RPS6 DAPI_DG")
 
 df_dapi_dg = format_df(dapi_dg)
 
+leveneTest_dapi_dg = leveneTest(exp ~ grp, data = df_dapi_dg)
+print(leveneTest_dapi_dg)
+
 dapi_dg_model = lm(exp ~ group_numeric, data = df_dapi_dg)
 summary(dapi_dg_model)
 
@@ -145,6 +182,9 @@ ordAOV(df_dapi_dg$group_numeric, df_dapi_dg$exp, type = "RLRT", nsim = 1000000)
 dg = openxlsx::read.xlsx("Aged_BO_CJL_RPS6.xlsx", sheet = "RPS6 DG")
 
 df_dg = format_df(dg)
+
+leveneTest_dg = leveneTest(exp ~ grp, data = df_dg)
+print(leveneTest_dg)
 
 dg_model = lm(exp ~ group_numeric, data = df_dg)
 summary(dg_model)
@@ -169,6 +209,9 @@ ctx_dapi = openxlsx::read.xlsx("Aged_BO_CJL_RPS6.xlsx", sheet = "RPS6 DAPI_CTX")
 
 df_ctx_dapi = format_df(ctx_dapi)
 
+leveneTest_ctx_dapi = leveneTest(exp ~ grp, data = df_ctx_dapi)
+print(leveneTest_ctx_dapi)
+
 ctx_dapi_model = lm(exp ~ group_numeric, data = df_ctx_dapi)
 summary(ctx_dapi_model)
 
@@ -191,6 +234,9 @@ ordAOV(df_ctx_dapi$group_numeric, df_ctx_dapi$exp, type = "RLRT", nsim = 1000000
 ctx = openxlsx::read.xlsx("Aged_BO_CJL_RPS6.xlsx", sheet = "RPS6 CTX")
  
 df_ctx = format_df(ctx)
+
+leveneTest_ctx = leveneTest(exp ~ grp, data = df_ctx)
+print(leveneTest_ctx)
 
 ctx_model = lm(exp ~ group_numeric, data = df_ctx)
 summary(ctx_model)
@@ -217,6 +263,9 @@ poly_total = openxlsx::read.xlsx("Polysome.xlsx", sheet = "AUC poly over total")
  
 poly_total_df = format_df(poly_total)
 
+leveneTest_poly_total = leveneTest(exp ~ grp, data = poly_total_df)
+print(leveneTest_poly_total)
+
 cor.test(poly_total_df$group_numeric, poly_total_df$exp, method = "kendall")
 
 poly_total_df$grp <- ordered(poly_total_df$grp,
@@ -237,6 +286,9 @@ ordAOV(poly_total_df$group_numeric, poly_total_df$exp, type = "RLRT", nsim = 100
 poly_80s = openxlsx::read.xlsx("Polysome.xlsx", sheet = "AUC poly over 80S deconv")
  
 poly_80s_df = format_df(poly_80s)
+
+leveneTest_poly_80s = leveneTest(exp ~ grp, data = poly_80s_df)
+print(leveneTest_poly_80s)
 
 cor.test(poly_80s_df$group_numeric, poly_80s_df$exp, method = "kendall")
 

@@ -9,6 +9,7 @@ editor: visual
 ```{r}
 library(tidyverse)
 library(NMOF)
+library(car)
 ```
 
 ```{r}
@@ -147,6 +148,8 @@ summary(test4)
 test5 = aov(diff~age_bin, data = preds)
 boxplot(diff~age_bin, data = preds)
 summary(test5)
+
+lev_test_agebin = leveneTest(diff~age_bin, data = preds)
 
 diff_plot = ggplot(preds, aes(x = factor(age_bin, levels = c("Y", "M", "O")), y = diff, fill = age_bin)) +
   geom_boxplot(alpha = 0.80) +
